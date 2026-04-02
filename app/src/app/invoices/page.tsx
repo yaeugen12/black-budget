@@ -14,7 +14,7 @@ import {
   Clock,
   History,
 } from "lucide-react";
-import { getInvoices, saveInvoice, isNewVendor, type StoredInvoice } from "@/lib/invoice-store";
+import { getInvoicesSync, saveInvoice, isNewVendor, type StoredInvoice } from "@/lib/invoice-store";
 
 interface ParsedInvoice {
   vendor: string;
@@ -74,7 +74,7 @@ export default function InvoicesPage() {
   const [submitted, setSubmitted] = useState(false);
   const [invoiceHistory, setInvoiceHistory] = useState<StoredInvoice[]>([]);
 
-  useEffect(() => { setInvoiceHistory(getInvoices()); }, [submitted]);
+  useEffect(() => { setInvoiceHistory(getInvoicesSync()); }, [submitted]);
 
   const handleFile = useCallback(async (f: File) => {
     setFile(f);
