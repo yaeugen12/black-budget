@@ -61,9 +61,7 @@ export function useBlackBudget() {
       { commitment: "confirmed" }
     );
 
-    // Anchor 0.32+ uses (idl, provider) constructor — program ID is in IDL or passed via options
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return new Program(IDL as any, provider as any);
+    return new Program(IDL as any, provider);
   }, [connection, wallet]);
 
   // ─── Initialize Company ─────────────────────────────────────────

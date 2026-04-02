@@ -127,7 +127,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const { connection } = useConnection();
   const wallet = useWallet();
 
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { setMounted(true); }, []);
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [companyPDA, setCompanyPDA] = useState<PublicKey | null>(null);
   const [payments, setPayments] = useState<PaymentData[]>([]);
@@ -135,15 +138,20 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   // Build program
   const getProgram = useCallback(() => {
-    if (!wallet.publicKey || !wallet.signTransaction) return null;
-    const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
-    return new Program(IDL as any, provider);
-  }, [connection, wallet]);
+    if (!mounted || !wallet.publicKey || !wallet.signTransaction) return null;
+    try {
+      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+      return new Program(IDL as any, provider);
+    } catch (e) {
+      console.error("Failed to create Program:", e);
+      return null;
+    }
+  }, [mounted, connection, wallet]);
 
   // ─── Fetch company data ───────────────────────────────────────
 
   const refresh = useCallback(async () => {
-    if (!wallet.publicKey) {
+    if (!mounted || !wallet.publicKey) {
       setCompany(null);
       setCompanyPDA(null);
       setPayments([]);
@@ -182,8 +190,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   }, [wallet.publicKey, getProgram]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (mounted) refresh();
+  }, [mounted, refresh]);
 
   // ─── Initialize Company ───────────────────────────────────────
 
