@@ -1,104 +1,93 @@
 import { createHash } from "crypto";
 
+export interface PaymentInput {
+  id: number;
+  recipient: string;
+  amount: number;
+  category: string;
+  timestamp: number;
+  memo?: string;
+}
+
 export interface Proof {
+  version: string;
   type: "investor" | "auditor" | "regulator";
-  period: { start: string; end: string };
-  generatedAt: string;
   merkleRoot: string;
-  data: InvestorProofData | AuditorProofData | RegulatorProofData;
+  leafCount: number;
+  generatedAt: string;
+  period: { start: string; end: string };
+  data: Record<string, unknown>;
 }
 
-interface InvestorProofData {
-  aggregates: {
-    totalSpend: number;
-    burnRate: number;
-    runway: number;
-    treasuryBalance: number;
-    teamSize: number;
-    categoryBreakdown: Record<string, number>;
-  };
-  redacted: string[];
+// ─── Merkle Tree ────────────────────────────────────────────────────
+
+function sha256(data: string): string {
+  return createHash("sha256").update(data).digest("hex");
 }
 
-interface AuditorProofData {
-  payments: {
-    id: string;
-    vendor: string; // Pseudonymized
-    amount: number;
-    category: string;
-    date: string;
-  }[];
-  totals: Record<string, number>;
-}
-
-interface RegulatorProofData {
-  requiresMultisig: true;
-  signaturesRequired: number;
-  signaturesCollected: number;
-}
-
-// Mock payment data (in production: read from on-chain + DB)
-const mockPayments = [
-  { id: "BB-001", vendor: "Acme Design Studio", amount: 3200, category: "contractor", date: "2026-03-28" },
-  { id: "BB-002", vendor: "Amazon Web Services", amount: 12800, category: "subscription", date: "2026-03-26" },
-  { id: "BB-003", vendor: "Team Payroll", amount: 28500, category: "payroll", date: "2026-03-25" },
-  { id: "BB-004", vendor: "Baker & McKenzie LLP", amount: 7500, category: "vendor", date: "2026-03-24" },
-  { id: "BB-005", vendor: "Figma Inc.", amount: 45, category: "subscription", date: "2026-03-22" },
-  { id: "BB-006", vendor: "Vercel Inc.", amount: 320, category: "subscription", date: "2026-03-20" },
-  { id: "BB-007", vendor: "Contract Dev", amount: 4800, category: "contractor", date: "2026-03-18" },
-];
-
-function pseudonymize(vendor: string): string {
-  const hash = createHash("sha256").update(vendor).digest("hex");
-  return `Vendor-${hash.slice(0, 4).toUpperCase()}`;
-}
-
-function computeMerkleRoot(payments: typeof mockPayments): string {
-  const leaves = payments.map((p) =>
-    createHash("sha256")
-      .update(`${p.id}:${p.vendor}:${p.amount}:${p.date}`)
-      .digest("hex")
-  );
-
-  // Simplified merkle (in production: proper binary tree)
-  let current = leaves;
-  while (current.length > 1) {
-    const next: string[] = [];
-    for (let i = 0; i < current.length; i += 2) {
-      const left = current[i];
-      const right = current[i + 1] || left;
-      next.push(createHash("sha256").update(left + right).digest("hex"));
-    }
-    current = next;
+function computeMerkleRoot(payments: PaymentInput[]): { root: string; leafCount: number } {
+  if (payments.length === 0) {
+    return { root: "0x" + "0".repeat(64), leafCount: 0 };
   }
 
-  return `0x${current[0].slice(0, 8)}...${current[0].slice(-4)}`;
+  const leaves = payments.map((p) =>
+    sha256(`${p.id}:${p.recipient}:${p.amount}:${p.category}:${p.timestamp}`)
+  );
+
+  let level = [...leaves];
+  while (level.length > 1) {
+    const next: string[] = [];
+    for (let i = 0; i < level.length; i += 2) {
+      const left = level[i];
+      const right = level[i + 1] || left;
+      next.push(sha256(left + right));
+    }
+    level = next;
+  }
+
+  return { root: "0x" + level[0], leafCount: leaves.length };
 }
+
+function pseudonymize(address: string): string {
+  const hash = sha256("pseudonym:" + address);
+  return `Addr-${hash.slice(0, 4).toUpperCase()}`;
+}
+
+// ─── Proof Generation (real data) ───────────────────────────────────
 
 export function generateProof(
   type: "investor" | "auditor" | "regulator",
+  payments: PaymentInput[],
+  context: {
+    companyName?: string;
+    companyAddress?: string;
+    vaultBalance?: number;
+    memberCount?: number;
+  } = {},
   periodStart?: string,
-  periodEnd?: string
+  periodEnd?: string,
 ): Proof {
-  const merkleRoot = computeMerkleRoot(mockPayments);
+  const { root, leafCount } = computeMerkleRoot(payments);
   const now = new Date().toISOString();
 
   const base = {
+    version: "1.0",
     type,
-    period: {
-      start: periodStart || "2026-03-01",
-      end: periodEnd || "2026-03-31",
-    },
+    merkleRoot: root,
+    leafCount,
     generatedAt: now,
-    merkleRoot,
+    period: {
+      start: periodStart || (payments.length > 0 ? new Date(Math.min(...payments.map((p) => p.timestamp)) * 1000).toISOString().split("T")[0] : now),
+      end: periodEnd || now.split("T")[0],
+    },
   };
 
   switch (type) {
     case "investor": {
-      const totalSpend = mockPayments.reduce((s, p) => s + p.amount, 0);
+      const totalSpend = payments.reduce((s, p) => s + p.amount, 0) / 1_000_000;
       const categoryBreakdown: Record<string, number> = {};
-      for (const p of mockPayments) {
-        categoryBreakdown[p.category] = (categoryBreakdown[p.category] || 0) + p.amount;
+      for (const p of payments) {
+        categoryBreakdown[p.category] = (categoryBreakdown[p.category] || 0) + p.amount / 1_000_000;
       }
 
       return {
@@ -106,52 +95,48 @@ export function generateProof(
         data: {
           aggregates: {
             totalSpend,
-            burnRate: totalSpend, // Monthly
-            runway: 284750 / totalSpend,
-            treasuryBalance: 284750,
-            teamSize: 8,
+            vaultBalance: context.vaultBalance || 0,
+            memberCount: context.memberCount || 0,
+            paymentCount: payments.length,
             categoryBreakdown,
           },
-          redacted: [
-            "individual_payments",
-            "vendor_names",
-            "payment_amounts",
-            "wallet_addresses",
-            "invoice_details",
-          ],
+          redacted: ["individual_payments", "vendor_names", "payment_amounts", "wallet_addresses"],
         },
       };
     }
 
     case "auditor": {
-      const payments = mockPayments.map((p) => ({
-        id: p.id,
-        vendor: pseudonymize(p.vendor), // Key difference: pseudonymized
-        amount: p.amount,
-        category: p.category,
-        date: p.date,
-      }));
-
-      const totals: Record<string, number> = {};
-      for (const p of mockPayments) {
-        totals[p.category] = (totals[p.category] || 0) + p.amount;
-      }
-      totals["total"] = mockPayments.reduce((s, p) => s + p.amount, 0);
-
-      return {
-        ...base,
-        data: { payments, totals },
-      };
-    }
-
-    case "regulator":
       return {
         ...base,
         data: {
-          requiresMultisig: true,
-          signaturesRequired: 2,
-          signaturesCollected: 0,
+          payments: payments.map((p) => ({
+            id: `BB-${String(p.id).padStart(3, "0")}`,
+            vendor: pseudonymize(p.recipient),
+            amount: p.amount / 1_000_000,
+            category: p.category,
+            date: new Date(p.timestamp * 1000).toISOString().split("T")[0],
+          })),
+          total: payments.reduce((s, p) => s + p.amount, 0) / 1_000_000,
         },
       };
+    }
+
+    case "regulator": {
+      return {
+        ...base,
+        data: {
+          payments: payments.map((p) => ({
+            id: p.id,
+            recipient: p.recipient,
+            amount: p.amount / 1_000_000,
+            category: p.category,
+            timestamp: p.timestamp,
+            memo: p.memo || "",
+          })),
+          total: payments.reduce((s, p) => s + p.amount, 0) / 1_000_000,
+          company: context,
+        },
+      };
+    }
   }
 }
