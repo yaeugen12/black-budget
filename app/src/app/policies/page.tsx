@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Shield, Save, Zap, Users, AlertTriangle, Lock, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shield, Save, Zap, Users, AlertTriangle, Lock, CheckCircle2, Loader2 } from "lucide-react";
+import { useCompany } from "@/lib/company-context";
 
 interface PolicyConfig {
   autoApproveLimit: number;
@@ -22,12 +23,38 @@ const defaultPolicies: PolicyConfig = {
 };
 
 export default function PoliciesPage() {
-  const [policies, setPolicies] = useState(defaultPolicies);
-  const [saved, setSaved] = useState(false);
+  const { company, setPolicies: setPoliciesOnChain } = useCompany();
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const [policies, setPolicies] = useState<PolicyConfig>(() => {
+    if (company) {
+      return {
+        autoApproveLimit: company.policy.autoApproveLimit.toNumber() / 1_000_000,
+        dualApproveThreshold: company.policy.dualApproveThreshold.toNumber() / 1_000_000,
+        monthlyBurnCap: company.policy.monthlyBurnCap.toNumber() / 1_000_000,
+        requireVendorVerification: company.policy.requireVendorVerification,
+        restrictToKnownRecipients: company.policy.restrictToKnownRecipients,
+        minRunwayMonths: company.policy.minRunwayMonths,
+      };
+    }
+    return defaultPolicies;
+  });
+
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await setPoliciesOnChain(policies);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      setError(e.message || "Failed to save policies");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -43,8 +70,8 @@ export default function PoliciesPage() {
           onClick={handleSave}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
         >
-          {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saved ? "Saved on-chain" : "Save Policies"}
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+          {saving ? "Saving..." : saved ? "Saved on-chain ✓" : "Save Policies"}
         </button>
       </div>
 
