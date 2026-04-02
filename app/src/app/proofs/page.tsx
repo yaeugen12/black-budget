@@ -122,13 +122,24 @@ export default function ProofsPage() {
 
     if (format === "json") {
       const proof = {
-        version: "1.0",
+        version: "2.0",
         type: activeView,
         merkleRoot,
         leafCount,
         generatedAt: now,
         company: { name: company?.name, address: companyPDA?.toBase58() },
+        program: "3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k",
+        network: "devnet",
+        onChainAnchor: anchoredTx ? {
+          tx: anchoredTx,
+          explorer: `https://explorer.solana.com/tx/${anchoredTx}?cluster=devnet`,
+        } : null,
         period: "all-time",
+        verification: {
+          instructions: "To verify: (1) Reconstruct leaf hashes from disclosed data using SHA-256(paymentId:recipient:amount:category:timestamp). (2) Build the Merkle tree bottom-up. (3) Compare the computed root with the merkleRoot field. (4) If on-chain anchor exists, fetch the ProofRecord PDA and compare the stored root.",
+          leafFormat: "SHA-256(paymentId:recipient:amount:category:timestamp)",
+          algorithm: "binary merkle tree, duplicate last leaf if odd count",
+        },
         data: activeView === "investor" ? {
           vaultBalance,
           totalSpent,
@@ -199,6 +210,20 @@ export default function ProofsPage() {
           <div>
             <h3 className="text-[14px] font-semibold">Compliance Proofs</h3>
             <p className="text-[11px] text-muted-foreground">Prove financial compliance without revealing data</p>
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+
+      {/* Verify Proof link */}
+      <Link href="/proofs/verify" className="card p-4 flex items-center justify-between hover:border-primary/20 transition-all group">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+            <ShieldCheck className="w-4 h-4 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold">Verify a Proof</h3>
+            <p className="text-[11px] text-muted-foreground">Upload a proof JSON to verify integrity and on-chain anchor</p>
           </div>
         </div>
         <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
