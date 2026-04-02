@@ -16,8 +16,8 @@ import { toast } from "sonner";
 import { IDL, PROGRAM_ID } from "./idl";
 
 const programId = new PublicKey(PROGRAM_ID);
-// Confidential Transfer-enabled USDC mint (Token-2022 with CT extension)
-export const USDC_MINT = new PublicKey("Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF");
+// USDC mint on devnet (Token-2022) — must match the mint used at company init
+export const USDC_MINT = new PublicKey("Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp");
 const SYSTEM = new PublicKey("11111111111111111111111111111111");
 
 // ─── PDA helpers (exported for reuse) ───────────────────────────────
