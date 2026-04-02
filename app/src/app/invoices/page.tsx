@@ -1,0 +1,283 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import {
+  Upload,
+  FileText,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
+  Loader2,
+  X,
+  Zap,
+} from "lucide-react";
+
+interface ParsedInvoice {
+  vendor: string;
+  amount: number;
+  currency: string;
+  dueDate: string;
+  category: string;
+  lineItems: { description: string; amount: number }[];
+  riskFlags: string[];
+  confidence: number;
+}
+
+interface PolicyDecision {
+  action: "auto_approve" | "require_approval" | "require_dual" | "block";
+  reason: string;
+  requiredApprovers: number;
+}
+
+// Simulated AI parsing (replace with real API call)
+async function simulateAIParse(file: File): Promise<ParsedInvoice> {
+  await new Promise((r) => setTimeout(r, 2000)); // Simulate API delay
+  return {
+    vendor: "Acme Design Studio",
+    amount: 3200.0,
+    currency: "USD",
+    dueDate: "2026-04-15",
+    category: "Contractor",
+    lineItems: [
+      { description: "UI/UX Design — Dashboard redesign", amount: 2400 },
+      { description: "Brand assets — Icon set v2", amount: 800 },
+    ],
+    riskFlags: [],
+    confidence: 0.97,
+  };
+}
+
+function evaluatePolicy(invoice: ParsedInvoice): PolicyDecision {
+  const amount = invoice.amount;
+  if (amount <= 5000) {
+    return { action: "auto_approve", reason: "Under $5,000 USDC auto-approve threshold", requiredApprovers: 0 };
+  } else if (amount <= 15000) {
+    return { action: "require_approval", reason: "Requires CFO approval", requiredApprovers: 1 };
+  } else {
+    return { action: "require_dual", reason: "Over $15,000 — requires Founder + CFO", requiredApprovers: 2 };
+  }
+}
+
+export default function InvoicesPage() {
+  const [dragActive, setDragActive] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [parsed, setParsed] = useState<ParsedInvoice | null>(null);
+  const [policyResult, setPolicyResult] = useState<PolicyDecision | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleFile = useCallback(async (f: File) => {
+    setFile(f);
+    setParsing(true);
+    setParsed(null);
+    setPolicyResult(null);
+    setSubmitted(false);
+
+    const result = await simulateAIParse(f);
+    setParsed(result);
+    setPolicyResult(evaluatePolicy(result));
+    setParsing(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragActive(false);
+      const f = e.dataTransfer.files[0];
+      if (f) handleFile(f);
+    },
+    [handleFile]
+  );
+
+  const handleSubmit = () => {
+    setSubmitted(true);
+    // In production: create on-chain payment request
+  };
+
+  const reset = () => {
+    setFile(null);
+    setParsed(null);
+    setPolicyResult(null);
+    setSubmitted(false);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Upload an invoice — AI extracts data, policies decide approval flow
+        </p>
+      </div>
+
+      {/* Upload Zone */}
+      {!file && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer ${
+            dragActive
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/50 hover:bg-primary/5"
+          }`}
+          onClick={() => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".pdf,.png,.jpg,.jpeg";
+            input.onchange = (e) => {
+              const f = (e.target as HTMLInputElement).files?.[0];
+              if (f) handleFile(f);
+            };
+            input.click();
+          }}
+        >
+          <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-4" />
+          <p className="text-lg font-medium">Drop invoice here or click to upload</p>
+          <p className="text-sm text-muted-foreground mt-1">PDF, PNG, or JPEG — AI will extract all data</p>
+        </div>
+      )}
+
+      {/* Parsing State */}
+      {parsing && (
+        <div className="glass rounded-xl p-8 text-center">
+          <Loader2 className="w-8 h-8 mx-auto text-primary animate-spin mb-4" />
+          <p className="text-lg font-medium">AI is parsing your invoice...</p>
+          <p className="text-sm text-muted-foreground mt-1">Extracting vendor, amount, line items, and risk signals</p>
+        </div>
+      )}
+
+      {/* Parsed Result */}
+      {parsed && !submitted && (
+        <div className="space-y-4">
+          {/* File info */}
+          <div className="flex items-center justify-between glass rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-primary" />
+              <span className="text-sm font-medium">{file?.name}</span>
+              <span className="badge-info text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                {Math.round(parsed.confidence * 100)}% confidence
+              </span>
+            </div>
+            <button onClick={reset} className="text-muted-foreground hover:text-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Extracted Data */}
+          <div className="glass rounded-xl p-6 space-y-4">
+            <h3 className="text-sm font-medium flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              AI-Extracted Invoice Data
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wider">Vendor</label>
+                <p className="text-lg font-medium mt-1">{parsed.vendor}</p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wider">Amount</label>
+                <p className="text-lg font-bold font-mono mt-1 text-primary">
+                  ${parsed.amount.toLocaleString()} {parsed.currency}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wider">Due Date</label>
+                <p className="text-sm mt-1">{parsed.dueDate}</p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wider">Category</label>
+                <p className="text-sm mt-1">{parsed.category}</p>
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-wider">Line Items</label>
+              <div className="mt-2 space-y-2">
+                {parsed.lineItems.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between bg-secondary/50 rounded-lg px-4 py-2.5">
+                    <span className="text-sm">{item.description}</span>
+                    <span className="text-sm font-mono">${item.amount.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Risk Flags */}
+            {parsed.riskFlags.length > 0 && (
+              <div className="flex items-center gap-2 badge-danger rounded-lg px-4 py-2.5">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-sm">Risk flags: {parsed.riskFlags.join(", ")}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Policy Decision */}
+          {policyResult && (
+            <div
+              className={`rounded-xl p-6 ${
+                policyResult.action === "auto_approve"
+                  ? "badge-success"
+                  : policyResult.action === "block"
+                  ? "badge-danger"
+                  : "badge-warning"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {policyResult.action === "auto_approve" ? (
+                  <Zap className="w-5 h-5" />
+                ) : policyResult.action === "block" ? (
+                  <AlertTriangle className="w-5 h-5" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5" />
+                )}
+                <div>
+                  <p className="font-medium">
+                    {policyResult.action === "auto_approve"
+                      ? "Auto-Approved"
+                      : policyResult.action === "block"
+                      ? "Blocked by Policy"
+                      : `Requires ${policyResult.requiredApprovers} Approval${policyResult.requiredApprovers > 1 ? "s" : ""}`}
+                  </p>
+                  <p className="text-sm opacity-80 mt-0.5">{policyResult.reason}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          {policyResult?.action !== "block" && (
+            <button
+              onClick={handleSubmit}
+              className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:opacity-90 transition-opacity"
+            >
+              {policyResult?.action === "auto_approve" ? "Execute Payment" : "Submit for Approval"}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Success State */}
+      {submitted && (
+        <div className="glass rounded-xl p-8 text-center glow-purple">
+          <CheckCircle2 className="w-12 h-12 mx-auto text-[var(--success)] mb-4" />
+          <h3 className="text-xl font-bold">
+            {policyResult?.action === "auto_approve" ? "Payment Executed" : "Submitted for Approval"}
+          </h3>
+          <p className="text-muted-foreground mt-2">
+            {policyResult?.action === "auto_approve"
+              ? `$${parsed?.amount.toLocaleString()} USDC sent to ${parsed?.vendor} via confidential transfer`
+              : `Waiting for ${policyResult?.requiredApprovers} approval(s) from authorized members`}
+          </p>
+          <button onClick={reset} className="mt-4 text-primary text-sm hover:underline">
+            Upload another invoice
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
