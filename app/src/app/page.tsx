@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 import { useCompany } from "@/lib/company-context";
+import { ConfidentialBadge } from "@/components/confidential-badge";
 
 export default function Dashboard() {
   const { company, companyPDA, payments, vaultBalance, depositToVault } = useCompany();
@@ -54,15 +55,18 @@ export default function Dashboard() {
         <div>
           <h1 className="text-heading">{company?.name || "Dashboard"}</h1>
           {companyPDA && (
-            <a
-              href={`https://explorer.solana.com/address/${companyPDA.toBase58()}?cluster=devnet`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-primary transition-colors mt-0.5 text-mono"
-            >
-              {companyPDA.toBase58().slice(0, 12)}...{companyPDA.toBase58().slice(-4)}
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <div className="flex items-center gap-3 mt-0.5">
+              <a
+                href={`https://explorer.solana.com/address/${companyPDA.toBase58()}?cluster=devnet`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-primary transition-colors text-mono"
+              >
+                {companyPDA.toBase58().slice(0, 12)}...{companyPDA.toBase58().slice(-4)}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <ConfidentialBadge />
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">

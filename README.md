@@ -99,6 +99,9 @@ This is critical for understanding the project's maturity:
 | Treasury policies (auto-approve, dual-approve, burn cap) | **Live** | Stored in Company PDA, enforced per payment |
 | Payment lifecycle (create → approve → execute) | **Live** | USDC transfers from vault to recipient |
 | Token-2022 USDC vault | **Live** | Vault holds real Token-2022 tokens |
+| Confidential Transfer extension | **Live** | Mint `Fc4uFQ...meF` has CT extension enabled (auto-approve policy) |
+
+> **Note on Confidential Transfers:** The USDC mint has the Confidential Transfer extension activated. However, Solana's ZK ElGamal Proof program is currently disabled on devnet, so actual confidential transfers (encrypted amounts) cannot execute yet. The extension is ready — when Solana re-enables ZK proofs, amounts will be hidden on-chain automatically. Standard transfers work normally in the meantime.
 
 ### Off-Chain (Real, running in the backend)
 
@@ -194,7 +197,8 @@ black-budget/
 | What | Address |
 |------|---------|
 | Program | `3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k` |
-| Token-2022 USDC Mint | `Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp` |
+| USDC Mint (Confidential) | `Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF` |
+| USDC Mint (Standard) | `Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp` |
 | Deploy Authority | `HGVzMKLxYYKFoy8XpGbCJjFYa739KndS8FYrnLnR9Es` |
 
 ## License
