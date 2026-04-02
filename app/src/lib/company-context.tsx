@@ -126,6 +126,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const pda = getCompanyPDA(wallet.publicKey);
       setCompanyPDA(pda);
 
+      // Check if company exists before fetching (avoids unhandled error for new wallets)
+      const acctInfo = await connection.getAccountInfo(pda);
+      if (!acctInfo) {
+        setCompany(null); setPayments([]); setVaultBalance(0); setLoading(false);
+        return;
+      }
+
       const data = await program.account.company.fetch(pda);
       setCompany(data);
 
