@@ -21,7 +21,8 @@ import fs from "fs";
 
 const RPC = "https://api.devnet.solana.com";
 const PROGRAM_ID = new PublicKey("3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k");
-const USDC_MINT = new PublicKey("Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF");
+// Must match the mint used when the company vault was initialized on devnet
+const USDC_MINT = new PublicKey("Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp");
 const SYSTEM = new PublicKey("11111111111111111111111111111111");
 
 // ─── IDL (minimal, just what we need) ───────────────────────────────
