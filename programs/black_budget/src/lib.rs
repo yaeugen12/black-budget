@@ -59,6 +59,19 @@ pub mod black_budget {
         payments::handle_execute_payment(ctx)
     }
 
+    /// Anchor a compliance proof on-chain
+    pub fn record_compliance_proof(
+        ctx: Context<RecordComplianceProof>,
+        constraint_hash: [u8; 32],
+        merkle_root: [u8; 32],
+        result: bool,
+        payment_count: u32,
+        period_start: i64,
+        period_end: i64,
+    ) -> Result<()> {
+        record_compliance_proof::handle_record_compliance_proof(ctx, constraint_hash, merkle_root, result, payment_count, period_start, period_end)
+    }
+
     /// Anchor a selective disclosure proof on-chain
     pub fn record_proof(
         ctx: Context<RecordProof>,

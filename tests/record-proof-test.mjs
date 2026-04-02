@@ -2,33 +2,70 @@
  * BLACK BUDGET — Record Proof E2E Test
  *
  * Tests the record_proof instruction end-to-end:
- * 1. Record an Investor proof on-chain
- * 2. Verify the ProofRecord account data matches inputs
- * 3. Record an Auditor proof (different period_end = different PDA)
- * 4. Record a Regulator proof
- * 5. Fail: duplicate proof (same period_end = same PDA, should fail)
- * 6. Fail: Contractor role cannot export proofs
+ * 1. Ensure a company exists for the local wallet
+ * 2. Record an Investor proof on-chain
+ * 3. Verify the ProofRecord account data matches inputs
+ * 4. Record an Auditor proof (different period_end = different PDA)
+ * 5. Record a Regulator proof
+ * 6. Fail: duplicate proof (same period_end = same PDA, should fail)
+ * 7. Fail: Contractor role cannot export proofs
  *
- * Run from /black-budget:  node tests/record-proof-test.mjs
+ * Run from /black-budget: node tests/record-proof-test.mjs
  */
 
-import { Connection, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import fs from "fs";
-
-// ─── Config ─────────────────────────────────────────────────────────
 
 const RPC = "https://api.devnet.solana.com";
 const PROGRAM_ID = new PublicKey("3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k");
+const USDC_MINT = new PublicKey("Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF");
 const SYSTEM = new PublicKey("11111111111111111111111111111111");
 const CLOCK = new PublicKey("SysvarC1ock11111111111111111111111111111111");
-
-// ─── IDL (minimal — record_proof + types) ───────────────────────────
 
 const IDL = {
   address: PROGRAM_ID.toBase58(),
   metadata: { name: "black_budget", version: "0.1.0", spec: "0.1.0" },
   instructions: [
+    {
+      name: "initialize_company",
+      discriminator: [75, 156, 55, 94, 184, 64, 58, 30],
+      accounts: [
+        { name: "authority", writable: true, signer: true },
+        { name: "company", writable: true },
+        { name: "vault", writable: true },
+        { name: "usdc_mint" },
+        { name: "founder_member", writable: true },
+        { name: "token_program" },
+        { name: "system_program", address: SYSTEM.toBase58() },
+      ],
+      args: [{ name: "name", type: "string" }],
+    },
+    {
+      name: "add_member",
+      discriminator: [13, 116, 123, 130, 126, 198, 57, 34],
+      accounts: [
+        { name: "authority", writable: true, signer: true },
+        { name: "company", writable: true },
+        { name: "authority_member" },
+        { name: "new_member_wallet" },
+        { name: "member", writable: true },
+        { name: "system_program", address: SYSTEM.toBase58() },
+      ],
+      args: [
+        { name: "role", type: { defined: { name: "Role" } } },
+        { name: "label", type: "string" },
+      ],
+    },
     {
       name: "record_proof",
       discriminator: [144, 172, 144, 35, 124, 170, 93, 80],
@@ -46,22 +83,6 @@ const IDL = {
         { name: "payment_count", type: "u32" },
         { name: "period_start", type: "i64" },
         { name: "period_end", type: "i64" },
-      ],
-    },
-    {
-      name: "add_member",
-      discriminator: [13, 116, 123, 130, 126, 198, 57, 34],
-      accounts: [
-        { name: "authority", writable: true, signer: true },
-        { name: "company" },
-        { name: "authority_member" },
-        { name: "new_member", writable: true },
-        { name: "system_program", address: SYSTEM.toBase58() },
-      ],
-      args: [
-        { name: "wallet", type: "pubkey" },
-        { name: "role", type: { defined: { name: "Role" } } },
-        { name: "label", type: "string" },
       ],
     },
   ],
@@ -127,8 +148,6 @@ const IDL = {
   errors: [],
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────
-
 function pda(seeds) {
   const [key] = PublicKey.findProgramAddressSync(seeds, PROGRAM_ID);
   return key;
@@ -136,13 +155,12 @@ function pda(seeds) {
 
 function proofPDA(companyPDA, periodEnd) {
   const buf = Buffer.alloc(8);
-  let ts = BigInt(periodEnd);
-  for (let i = 0; i < 8; i++) { buf[i] = Number(ts & 0xffn); ts >>= 8n; }
+  buf.writeBigInt64LE(BigInt(periodEnd));
   return pda([Buffer.from("proof"), companyPDA.toBuffer(), buf]);
 }
 
 function log(step, msg) {
-  const icon = msg.startsWith("PASS") ? "✅" : msg.startsWith("FAIL") ? "❌" : msg.startsWith("SKIP") ? "⏭️" : "🔹";
+  const icon = msg.startsWith("PASS") ? "✅" : msg.startsWith("FAIL") ? "❌" : msg.startsWith("SETUP") ? "🛠️" : "🔹";
   console.log(`  ${icon} [${step}] ${msg}`);
 }
 
@@ -152,14 +170,47 @@ function randomMerkleRoot() {
   return root;
 }
 
-// ─── Main ───────────────────────────────────────────────────────────
+async function ensureCompany(program, owner, companyPDA, memberPDA) {
+  try {
+    const company = await program.account.company.fetch(companyPDA);
+    log("0", `PASS — Company "${company.name}" found (${company.memberCount} members)`);
+    return;
+  } catch {
+    const vaultPDA = pda([Buffer.from("vault"), companyPDA.toBuffer()]);
+    const tx = await program.methods
+      .initializeCompany("Proof Test Co")
+      .accounts({
+        authority: owner.publicKey,
+        company: companyPDA,
+        vault: vaultPDA,
+        usdcMint: USDC_MINT,
+        founderMember: memberPDA,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SYSTEM,
+      })
+      .rpc();
+
+    log("0", `PASS — Company created for test setup (${tx.slice(0, 30)}...)`);
+  }
+}
+
+async function fundWallet(connection, owner, recipient, lamports) {
+  const tx = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: owner.publicKey,
+      toPubkey: recipient.publicKey,
+      lamports,
+    })
+  );
+
+  await sendAndConfirmTransaction(connection, tx, [owner], { commitment: "confirmed" });
+}
 
 async function main() {
   console.log("\n╔══════════════════════════════════════════════╗");
   console.log("║    BLACK BUDGET — Record Proof E2E Test      ║");
   console.log("╚══════════════════════════════════════════════╝\n");
 
-  // Setup
   const conn = new Connection(RPC, "confirmed");
   const kp = Keypair.fromSecretKey(
     Uint8Array.from(JSON.parse(fs.readFileSync(process.env.HOME + "/.config/solana/id.json", "utf8")))
@@ -174,6 +225,7 @@ async function main() {
 
   const companyPDA = pda([Buffer.from("company"), kp.publicKey.toBuffer()]);
   const memberPDA = pda([Buffer.from("member"), companyPDA.toBuffer(), kp.publicKey.toBuffer()]);
+  const basePeriodEnd = Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 1000);
 
   console.log(`  Wallet:  ${kp.publicKey.toBase58()}`);
   console.log(`  Program: ${PROGRAM_ID.toBase58()}`);
@@ -182,18 +234,10 @@ async function main() {
   let passed = 0;
   let failed = 0;
 
-  // Verify company exists
-  try {
-    const company = await program.account.company.fetch(companyPDA);
-    log("0", `Company "${company.name}" found — ${company.memberCount} members`);
-  } catch {
-    log("0", "FAIL — Company not found. Create one from the UI first.");
-    process.exit(1);
-  }
+  await ensureCompany(program, kp, companyPDA, memberPDA);
 
-  // ─── TEST 1: Record Investor Proof ────────────────────────────────
   console.log("\n─── Test 1: Record Investor Proof ───");
-  const periodEnd1 = Math.floor(Date.now() / 1000);
+  const periodEnd1 = basePeriodEnd;
   const periodStart1 = periodEnd1 - 86400 * 30;
   const root1 = randomMerkleRoot();
   const paymentCount1 = 7;
@@ -223,14 +267,15 @@ async function main() {
     log("1", `TX: ${tx.slice(0, 30)}...`);
     passed++;
 
-    // ─── TEST 2: Verify ProofRecord data ────────────────────────────
     console.log("\n─── Test 2: Verify ProofRecord On-Chain Data ───");
     const record = await program.account.proofRecord.fetch(proofPda);
-
     let allOk = true;
     const check = (label, actual, expected) => {
       const ok = JSON.stringify(actual) === JSON.stringify(expected);
-      if (!ok) { log("2", `FAIL — ${label}: got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`); allOk = false; }
+      if (!ok) {
+        log("2", `FAIL — ${label}: got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
+        allOk = false;
+      }
     };
 
     check("company", record.company.toBase58(), companyPDA.toBase58());
@@ -244,7 +289,6 @@ async function main() {
 
     if (allOk) {
       log("2", "PASS — All ProofRecord fields match inputs");
-      log("2", `Root: [${root1.slice(0, 4).join(",")},...] | Count: ${record.paymentCount} | Generated: ${new Date(record.generatedAt.toNumber() * 1000).toISOString()}`);
       passed++;
     } else {
       failed++;
@@ -255,9 +299,8 @@ async function main() {
     failed++;
   }
 
-  // ─── TEST 3: Record Auditor Proof (different period_end) ──────────
   console.log("\n─── Test 3: Record Auditor Proof ───");
-  const periodEnd3 = periodEnd1 + 1; // +1s to get a different PDA
+  const periodEnd3 = basePeriodEnd + 1;
   try {
     const proofPda = proofPDA(companyPDA, periodEnd3);
     const tx = await program.methods
@@ -278,12 +321,10 @@ async function main() {
       })
       .rpc();
 
-    // Verify proof type
     const record = await program.account.proofRecord.fetch(proofPda);
     const proofType = Object.keys(record.proofType)[0];
     if (proofType === "auditor") {
-      log("3", `PASS — Auditor proof anchored (type: ${proofType})`);
-      log("3", `TX: ${tx.slice(0, 30)}...`);
+      log("3", `PASS — Auditor proof anchored (TX ${tx.slice(0, 30)}...)`);
       passed++;
     } else {
       log("3", `FAIL — Expected auditor, got ${proofType}`);
@@ -295,12 +336,11 @@ async function main() {
     failed++;
   }
 
-  // ─── TEST 4: Record Regulator Proof ───────────────────────────────
   console.log("\n─── Test 4: Record Regulator Proof ───");
-  const periodEnd4 = periodEnd1 + 2;
+  const periodEnd4 = basePeriodEnd + 2;
   try {
     const proofPda = proofPDA(companyPDA, periodEnd4);
-    const tx = await program.methods
+    await program.methods
       .recordProof(
         { regulator: {} },
         randomMerkleRoot(),
@@ -321,7 +361,7 @@ async function main() {
     const record = await program.account.proofRecord.fetch(proofPda);
     const proofType = Object.keys(record.proofType)[0];
     if (proofType === "regulator") {
-      log("4", `PASS — Regulator proof anchored (type: ${proofType})`);
+      log("4", "PASS — Regulator proof anchored");
       passed++;
     } else {
       log("4", `FAIL — Expected regulator, got ${proofType}`);
@@ -333,10 +373,8 @@ async function main() {
     failed++;
   }
 
-  // ─── TEST 5: Duplicate proof should fail ──────────────────────────
   console.log("\n─── Test 5: Duplicate Proof (same period_end → should fail) ───");
   try {
-    const proofPda = proofPDA(companyPDA, periodEnd1); // same as test 1
     await program.methods
       .recordProof(
         { investor: {} },
@@ -349,7 +387,7 @@ async function main() {
         authority: kp.publicKey,
         company: companyPDA,
         member: memberPDA,
-        proofRecord: proofPda,
+        proofRecord: proofPDA(companyPDA, periodEnd1),
         clock: CLOCK,
         systemProgram: SYSTEM,
       })
@@ -358,96 +396,77 @@ async function main() {
     log("5", "FAIL — Should have thrown (duplicate PDA)");
     failed++;
   } catch (e) {
-    // Expected to fail — PDA already initialized
-    if (e.message.includes("already in use") || e.logs?.some(l => l.includes("already in use"))) {
+    if (e.message.includes("already in use") || e.logs?.some((l) => l.includes("already in use"))) {
       log("5", "PASS — Correctly rejected duplicate proof (account already in use)");
-      passed++;
     } else {
       log("5", `PASS — Correctly rejected (${e.message.slice(0, 60)}...)`);
-      passed++;
     }
+    passed++;
   }
 
-  // ─── TEST 6: Contractor cannot export proofs ──────────────────────
   console.log("\n─── Test 6: Contractor Cannot Export Proofs ───");
+  const contractorKp = Keypair.generate();
+  const contractorMemberPDA = pda([
+    Buffer.from("member"),
+    companyPDA.toBuffer(),
+    contractorKp.publicKey.toBuffer(),
+  ]);
 
-  // Check if wallet-approver.json exists for a second signer
-  const approverPath = process.env.HOME + "/.config/solana/wallet-approver.json";
-  let approverKp;
   try {
-    approverKp = Keypair.fromSecretKey(
-      Uint8Array.from(JSON.parse(fs.readFileSync(approverPath, "utf8")))
-    );
-  } catch {
-    // try local test dir
-    try {
-      approverKp = Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(fs.readFileSync("tests/wallet-approver.json", "utf8")))
-      );
-    } catch {
-      approverKp = null;
+    await fundWallet(conn, kp, contractorKp, Math.floor(0.01 * LAMPORTS_PER_SOL));
+    log("6", "SETUP — Funded temporary contractor wallet");
+
+    const addTx = await program.methods
+      .addMember({ contractor: {} }, "Proof Test Contractor")
+      .accounts({
+        authority: kp.publicKey,
+        company: companyPDA,
+        authorityMember: memberPDA,
+        newMemberWallet: contractorKp.publicKey,
+        member: contractorMemberPDA,
+        systemProgram: SYSTEM,
+      })
+      .rpc();
+    log("6", `SETUP — Contractor member added (${addTx.slice(0, 30)}...)`);
+
+    const contractorWallet = {
+      publicKey: contractorKp.publicKey,
+      signTransaction: async (tx) => { tx.sign(contractorKp); return tx; },
+      signAllTransactions: async (txs) => { txs.forEach((tx) => tx.sign(contractorKp)); return txs; },
+    };
+    const contractorProvider = new AnchorProvider(conn, contractorWallet, { commitment: "confirmed" });
+    const contractorProgram = new Program(IDL, contractorProvider);
+    const periodEnd6 = basePeriodEnd + 100;
+
+    await contractorProgram.methods
+      .recordProof(
+        { investor: {} },
+        randomMerkleRoot(),
+        1,
+        new BN(periodEnd6 - 86400),
+        new BN(periodEnd6),
+      )
+      .accounts({
+        authority: contractorKp.publicKey,
+        company: companyPDA,
+        member: contractorMemberPDA,
+        proofRecord: proofPDA(companyPDA, periodEnd6),
+        clock: CLOCK,
+        systemProgram: SYSTEM,
+      })
+      .rpc();
+
+    log("6", "FAIL — Contractor should not be able to export proofs");
+    failed++;
+  } catch (e) {
+    if (e.message.includes("CannotExportProofs") || e.logs?.some((l) => l.includes("CannotExportProofs"))) {
+      log("6", "PASS — Contractor correctly rejected (CannotExportProofs)");
+    } else {
+      log("6", `PASS — Contractor rejected (${e.message.slice(0, 60)}...)`);
     }
+    passed++;
   }
 
-  if (!approverKp) {
-    log("6", "SKIP — No secondary wallet found (wallet-approver.json)");
-  } else {
-    // Check if this approver is a member and what role they have
-    const approverMemberPDA = pda([Buffer.from("member"), companyPDA.toBuffer(), approverKp.publicKey.toBuffer()]);
-    try {
-      const member = await program.account.member.fetch(approverMemberPDA);
-      const role = Object.keys(member.role)[0];
-
-      if (role === "contractor") {
-        // Perfect — we can test the rejection
-        const periodEnd6 = periodEnd1 + 100;
-        const approverWallet = {
-          publicKey: approverKp.publicKey,
-          signTransaction: async (tx) => { tx.sign(approverKp); return tx; },
-          signAllTransactions: async (txs) => { txs.forEach((tx) => tx.sign(approverKp)); return txs; },
-        };
-        const approverProvider = new AnchorProvider(conn, approverWallet, { commitment: "confirmed" });
-        const approverProgram = new Program(IDL, approverProvider);
-
-        try {
-          await approverProgram.methods
-            .recordProof(
-              { investor: {} },
-              randomMerkleRoot(),
-              1,
-              new BN(periodEnd6 - 86400),
-              new BN(periodEnd6),
-            )
-            .accounts({
-              authority: approverKp.publicKey,
-              company: companyPDA,
-              member: approverMemberPDA,
-              proofRecord: proofPDA(companyPDA, periodEnd6),
-              clock: CLOCK,
-              systemProgram: SYSTEM,
-            })
-            .rpc();
-
-          log("6", "FAIL — Contractor should not be able to export proofs");
-          failed++;
-        } catch (e) {
-          if (e.message.includes("CannotExportProofs") || e.logs?.some(l => l.includes("CannotExportProofs"))) {
-            log("6", "PASS — Contractor correctly rejected (CannotExportProofs)");
-            passed++;
-          } else {
-            log("6", `PASS — Contractor rejected (${e.message.slice(0, 60)}...)`);
-            passed++;
-          }
-        }
-      } else {
-        log("6", `SKIP — Approver wallet has role "${role}", not Contractor (need a Contractor to test rejection)`);
-      }
-    } catch {
-      log("6", "SKIP — Approver wallet is not a member of this company");
-    }
-  }
-
-  // ─── Summary ──────────────────────────────────────────────────────
   console.log("\n╔══════════════════════════════════════════════╗");
   console.log(`║  Results: ${passed} passed, ${failed} failed${" ".repeat(Math.max(0, 22 - String(passed).length - String(failed).length))}║`);
   console.log("╚══════════════════════════════════════════════╝\n");

@@ -4,10 +4,18 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/lib/company-context";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { computeMerkleRoot, pseudonymize, abbreviateHash, type MerkleLeaf } from "@/lib/merkle";
+import {
+  computeMerkleRoot,
+  pseudonymize,
+  abbreviateHash,
+  hexToBytes32,
+  type MerkleLeaf,
+} from "@/lib/merkle";
+import Link from "next/link";
 import {
   Eye, EyeOff, Shield, Download, Copy, CheckCircle2,
   Lock, Unlock, BarChart3, FileText, Hash, Loader2, AlertTriangle, Anchor,
+  ShieldCheck, ChevronRight,
 } from "lucide-react";
 
 type ProofView = "investor" | "auditor" | "regulator" | null;
@@ -94,14 +102,10 @@ export default function ProofsPage() {
     if (!activeView || !merkleRoot) return;
     setAnchoring(true);
     try {
-      // Convert hex merkle root to byte array
-      const rootBytes = Array.from(
-        { length: 32 },
-        (_, i) => parseInt(merkleRoot.slice(i * 2, i * 2 + 2), 16) || 0
-      );
-      const tx = await anchorProof(activeView, rootBytes, payments.length);
+      const tx = await anchorProof(activeView, hexToBytes32(merkleRoot), payments.length);
       setAnchoredTx(tx);
     } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to anchor proof");
       console.error("Anchor failed:", e);
     } finally {
       setAnchoring(false);
@@ -185,6 +189,20 @@ export default function ProofsPage() {
           Generate cryptographic proofs from {payments.length} on-chain payment{payments.length !== 1 ? "s" : ""}
         </p>
       </div>
+
+      {/* Compliance Proofs link */}
+      <Link href="/proofs/compliance" className="card p-4 flex items-center justify-between hover:border-primary/20 transition-all group">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold">Compliance Proofs</h3>
+            <p className="text-[11px] text-muted-foreground">Prove financial compliance without revealing data</p>
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
 
       {noPayments && (
         <div className="card p-5 flex items-center gap-3">

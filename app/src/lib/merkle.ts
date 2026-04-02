@@ -59,6 +59,25 @@ export async function computeMerkleRoot(leaves: MerkleLeaf[]): Promise<{
 }
 
 /**
+ * Convert a 32-byte hex string into a byte array.
+ */
+export function hexToBytes32(hex: string): number[] {
+  const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
+
+  if (normalized.length !== 64) {
+    throw new Error("Merkle root must be exactly 32 bytes");
+  }
+
+  if (!/^[0-9a-fA-F]+$/.test(normalized)) {
+    throw new Error("Merkle root must be valid hex");
+  }
+
+  return Array.from({ length: 32 }, (_, i) =>
+    parseInt(normalized.slice(i * 2, i * 2 + 2), 16)
+  );
+}
+
+/**
  * Pseudonymize a wallet address — deterministic but irreversible
  */
 export async function pseudonymize(address: string): Promise<string> {

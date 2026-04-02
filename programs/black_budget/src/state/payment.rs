@@ -107,3 +107,29 @@ pub enum ProofType {
     /// Regulator: full disclosure
     Regulator,
 }
+
+/// On-chain compliance proof — records a YES/NO answer to a parametric query
+#[account]
+#[derive(InitSpace)]
+pub struct ComplianceProof {
+    /// Company
+    pub company: Pubkey,
+    /// Who generated the proof
+    pub generated_by: Pubkey,
+    /// SHA-256 of the canonical query definition (deterministic)
+    pub constraint_hash: [u8; 32],
+    /// Merkle root of the underlying payment dataset
+    pub merkle_root: [u8; 32],
+    /// The boolean result: true = compliant, false = non-compliant
+    pub result: bool,
+    /// Number of payments in the dataset
+    pub payment_count: u32,
+    /// Period start
+    pub period_start: i64,
+    /// Period end
+    pub period_end: i64,
+    /// When anchored
+    pub generated_at: i64,
+    /// PDA bump
+    pub bump: u8,
+}

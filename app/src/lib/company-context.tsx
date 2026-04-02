@@ -70,6 +70,7 @@ interface CompanyContextType {
   rejectPayment: (paymentId: number) => Promise<string>;
   depositToVault: (amount: number) => Promise<string>;
   anchorProof: (proofType: string, merkleRoot: number[], paymentCount: number) => Promise<string>;
+  anchorComplianceProof: (constraintHash: number[], merkleRoot: number[], result: boolean, paymentCount: number, periodStart: number, periodEnd: number) => Promise<string>;
   refresh: () => Promise<void>;
 }
 
@@ -394,11 +395,56 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     });
   }, [getProgram, wallet.publicKey, companyPDA, connection, refresh]);
 
+  // ─── Anchor Compliance Proof On-Chain ─────────────────────────────
+
+  const anchorComplianceProof = useCallback(async (
+    constraintHash: number[], merkleRoot: number[], result: boolean,
+    paymentCount: number, periodStart: number, periodEnd: number
+  ) => {
+    const program = getProgram();
+    if (!program || !wallet.publicKey || !companyPDA) throw new Error("Not ready");
+
+    return withToast("Anchor compliance proof", async () => {
+      // PDA: ["compliance", company, constraint_hash, period_end]
+      const chBuf = Buffer.from(constraintHash);
+      const tsBuf = Buffer.alloc(8);
+      let ts = BigInt(periodEnd);
+      for (let i = 0; i < 8; i++) { tsBuf[i] = Number(ts & 0xffn); ts >>= 8n; }
+
+      const [compliancePDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("compliance"), companyPDA.toBuffer(), chBuf, tsBuf],
+        programId
+      );
+
+      const tx = await program.methods
+        .recordComplianceProof(
+          constraintHash,
+          merkleRoot,
+          result,
+          paymentCount,
+          new BN(periodStart),
+          new BN(periodEnd),
+        )
+        .accounts({
+          authority: wallet.publicKey,
+          company: companyPDA,
+          member: getMemberPDA(companyPDA, wallet.publicKey),
+          complianceProof: compliancePDA,
+          clock: new PublicKey("SysvarC1ock11111111111111111111111111111111"),
+          systemProgram: SYSTEM,
+        })
+        .rpc();
+
+      await refresh();
+      return tx;
+    });
+  }, [getProgram, wallet.publicKey, companyPDA, refresh]);
+
   return (
     <CompanyContext.Provider value={{
       loading, company, companyPDA, vaultBalance, payments, error,
       initializeCompany, addMember, setPolicies, createPayment,
-      approvePayment, rejectPayment, depositToVault, anchorProof, refresh,
+      approvePayment, rejectPayment, depositToVault, anchorProof, anchorComplianceProof, refresh,
     }}>
       {children}
     </CompanyContext.Provider>
