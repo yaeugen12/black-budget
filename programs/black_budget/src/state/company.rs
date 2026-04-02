@@ -89,6 +89,10 @@ impl Role {
         matches!(self, Role::Owner | Role::Approver)
     }
 
+    pub fn can_execute(&self) -> bool {
+        matches!(self, Role::Owner | Role::Approver)
+    }
+
     pub fn can_create_payment(&self) -> bool {
         matches!(self, Role::Owner | Role::Approver | Role::Contractor)
     }

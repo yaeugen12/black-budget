@@ -2,6 +2,20 @@ use anchor_lang::prelude::*;
 
 use crate::state::*;
 
+#[event]
+pub struct MemberAdded {
+    pub company: Pubkey,
+    pub wallet: Pubkey,
+    pub role: u8,
+    pub label: String,
+}
+
+#[event]
+pub struct MemberRemoved {
+    pub company: Pubkey,
+    pub wallet: Pubkey,
+}
+
 #[derive(Accounts)]
 pub struct AddMember<'info> {
     #[account(mut)]
@@ -64,6 +78,13 @@ pub fn handle_add_member(
 
     ctx.accounts.company.member_count += 1;
 
+    emit!(MemberAdded {
+        company: ctx.accounts.company.key(),
+        wallet: member.wallet,
+        role: role as u8,
+        label: member.label.clone(),
+    });
+
     msg!(
         "Member {} added as {:?}",
         member.wallet,
@@ -109,6 +130,11 @@ pub fn handle_remove_member(ctx: Context<RemoveMember>) -> Result<()> {
     require!(ctx.accounts.company.member_count > 0, MemberError::MaxMembersReached);
     member.is_active = false;
     ctx.accounts.company.member_count -= 1;
+
+    emit!(MemberRemoved {
+        company: ctx.accounts.company.key(),
+        wallet: member.wallet,
+    });
 
     msg!("Member {} deactivated", member.wallet);
     Ok(())

@@ -2,6 +2,15 @@ use anchor_lang::prelude::*;
 
 use crate::state::*;
 
+#[event]
+pub struct PoliciesUpdated {
+    pub company: Pubkey,
+    pub authority: Pubkey,
+    pub auto_approve_limit: u64,
+    pub dual_approve_threshold: u64,
+    pub monthly_burn_cap: u64,
+}
+
 #[derive(Accounts)]
 pub struct SetPolicies<'info> {
     pub authority: Signer<'info>,
@@ -34,6 +43,14 @@ pub fn handle_set_policies(ctx: Context<SetPolicies>, policy: PolicyConfig) -> R
 
     let company = &mut ctx.accounts.company;
     company.policy = policy;
+
+    emit!(PoliciesUpdated {
+        company: company.key(),
+        authority: ctx.accounts.authority.key(),
+        auto_approve_limit: company.policy.auto_approve_limit,
+        dual_approve_threshold: company.policy.dual_approve_threshold,
+        monthly_burn_cap: company.policy.monthly_burn_cap,
+    });
 
     msg!("Policies updated for company '{}'", company.name);
     msg!(

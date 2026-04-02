@@ -153,10 +153,10 @@ function pda(seeds) {
   return key;
 }
 
-function proofPDA(companyPDA, periodEnd) {
+function proofPDA(companyPDA, proofTypeByte, periodEnd) {
   const buf = Buffer.alloc(8);
   buf.writeBigInt64LE(BigInt(periodEnd));
-  return pda([Buffer.from("proof"), companyPDA.toBuffer(), buf]);
+  return pda([Buffer.from("proof"), companyPDA.toBuffer(), Buffer.from([proofTypeByte]), buf]);
 }
 
 function log(step, msg) {
@@ -250,7 +250,7 @@ async function main() {
   const paymentCount1 = 7;
 
   try {
-    const proofPda = proofPDA(companyPDA, periodEnd1);
+    const proofPda = proofPDA(companyPDA, 0, periodEnd1);
     const tx = await program.methods
       .recordProof(
         { investor: {} },
@@ -313,7 +313,7 @@ async function main() {
   console.log("\n─── Test 3: Record Auditor Proof ───");
   const periodEnd3 = basePeriodEnd + 1;
   try {
-    const proofPda = proofPDA(companyPDA, periodEnd3);
+    const proofPda = proofPDA(companyPDA, 1, periodEnd3);
     const tx = await program.methods
       .recordProof(
         { auditor: {} },
@@ -354,7 +354,7 @@ async function main() {
   console.log("\n─── Test 4: Record Regulator Proof ───");
   const periodEnd4 = basePeriodEnd + 2;
   try {
-    const proofPda = proofPDA(companyPDA, periodEnd4);
+    const proofPda = proofPDA(companyPDA, 2, periodEnd4);
     await program.methods
       .recordProof(
         { regulator: {} },
@@ -406,7 +406,7 @@ async function main() {
         authority: kp.publicKey,
         company: companyPDA,
         member: memberPDA,
-        proofRecord: proofPDA(companyPDA, periodEnd1),
+        proofRecord: proofPDA(companyPDA, 0, periodEnd1),
         clock: CLOCK,
         systemProgram: SYSTEM,
       })
@@ -473,7 +473,7 @@ async function main() {
         authority: contractorKp.publicKey,
         company: companyPDA,
         member: contractorMemberPDA,
-        proofRecord: proofPDA(companyPDA, periodEnd6),
+        proofRecord: proofPDA(companyPDA, 0, periodEnd6),
         clock: CLOCK,
         systemProgram: SYSTEM,
       })

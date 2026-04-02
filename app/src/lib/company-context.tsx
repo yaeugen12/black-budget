@@ -393,12 +393,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         : proofType === "auditor" ? { auditor: {} }
         : { regulator: {} };
 
-      // PDA seeded with period_end (deterministic — both client and program use the same arg)
+      // PDA seeded with proof_type + period_end
+      const proofTypeByte = proofType === "investor" ? 0 : proofType === "auditor" ? 1 : 2;
       const tsBytes = Buffer.alloc(8);
       let ts = BigInt(periodEnd);
       for (let i = 0; i < 8; i++) { tsBytes[i] = Number(ts & 0xffn); ts >>= 8n; }
       const [proofPDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from("proof"), companyPDA.toBuffer(), tsBytes],
+        [Buffer.from("proof"), companyPDA.toBuffer(), Buffer.from([proofTypeByte]), tsBytes],
         programId
       );
 

@@ -29,6 +29,7 @@ pub struct RecordProof<'info> {
         seeds = [
             b"proof",
             company.key().as_ref(),
+            &[proof_type as u8],
             &period_end.to_le_bytes(),
         ],
         bump,

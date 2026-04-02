@@ -187,7 +187,7 @@ export default function PoliciesPage() {
             className="w-full accent-[var(--primary)]"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            If runway drops below this, discretionary spending is automatically blocked
+            Advisory — stored on-chain for off-chain enforcement by the rule engine
           </p>
         </div>
       </div>
@@ -203,7 +203,7 @@ export default function PoliciesPage() {
           <label className="flex items-center justify-between cursor-pointer">
             <div>
               <p className="text-sm font-medium">Require New Vendor Verification</p>
-              <p className="text-xs text-muted-foreground">First-time vendors need manual approval regardless of amount</p>
+              <p className="text-xs text-muted-foreground">Advisory — checked off-chain by the rule engine</p>
             </div>
             <div
               onClick={() => setPolicies({ ...policies, requireVendorVerification: !policies.requireVendorVerification })}
@@ -222,7 +222,7 @@ export default function PoliciesPage() {
           <label className="flex items-center justify-between cursor-pointer">
             <div>
               <p className="text-sm font-medium">Restrict to Known Recipients</p>
-              <p className="text-xs text-muted-foreground">Only pre-approved wallets can receive payments</p>
+              <p className="text-xs text-muted-foreground">Advisory — checked off-chain by the rule engine</p>
             </div>
             <div
               onClick={() => setPolicies({ ...policies, restrictToKnownRecipients: !policies.restrictToKnownRecipients })}

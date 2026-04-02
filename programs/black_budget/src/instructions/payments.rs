@@ -132,6 +132,10 @@ pub fn handle_create_payment(
 ) -> Result<()> {
     require!(amount > 0, PaymentError::ZeroAmount);
     require!(memo.len() <= MAX_MEMO_LEN, PaymentError::MemoTooLong);
+    require!(
+        ctx.accounts.requester.key() != ctx.accounts.recipient.key(),
+        PaymentError::CannotPaySelf
+    );
 
     let clock = Clock::get()?;
     let company = &mut ctx.accounts.company;
@@ -152,7 +156,7 @@ pub fn handle_create_payment(
     // Determine required approvals
     let required_approvals = if amount <= policy.auto_approve_limit {
         0
-    } else if policy.dual_approve_threshold > 0 && amount > policy.dual_approve_threshold {
+    } else if policy.dual_approve_threshold > 0 && amount >= policy.dual_approve_threshold {
         2
     } else {
         1
@@ -300,6 +304,7 @@ pub struct RejectPayment<'info> {
         ],
         bump = payment.bump,
         constraint = payment.status == PaymentStatus::Pending @ PaymentError::NotPending,
+        constraint = payment.company == company.key() @ PaymentError::PaymentNotInCompany,
     )]
     pub payment: Account<'info, PaymentRequest>,
 }
@@ -337,7 +342,7 @@ pub struct ExecutePayment<'info> {
         seeds = [b"member", company.key().as_ref(), executor.key().as_ref()],
         bump = executor_member.bump,
         constraint = executor_member.is_active @ PaymentError::MemberInactive,
-        constraint = executor_member.role.can_approve() @ PaymentError::CannotApprove,
+        constraint = executor_member.role.can_execute() @ PaymentError::CannotExecute,
     )]
     pub executor_member: Account<'info, Member>,
 
@@ -391,6 +396,15 @@ pub fn handle_execute_payment(ctx: Context<ExecutePayment>) -> Result<()> {
 
     // Lazy monthly reset
     maybe_reset_monthly_spend(company, &clock);
+
+    // Enforce monthly burn cap at execution time (not just creation)
+    let policy = &company.policy;
+    if policy.monthly_burn_cap > 0 {
+        require!(
+            company.monthly_spent.checked_add(payment.amount).unwrap_or(u64::MAX) <= policy.monthly_burn_cap,
+            PaymentError::MonthlyCapExceeded
+        );
+    }
 
     require!(
         ctx.accounts.vault.amount >= payment.amount,
@@ -473,4 +487,10 @@ pub enum PaymentError {
     CannotApproveSelf,
     #[msg("Vault has insufficient balance")]
     InsufficientVaultBalance,
+    #[msg("Cannot create payment to yourself")]
+    CannotPaySelf,
+    #[msg("Member cannot execute payments")]
+    CannotExecute,
+    #[msg("Payment does not belong to this company")]
+    PaymentNotInCompany,
 }
