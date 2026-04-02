@@ -45,7 +45,8 @@ export function getVaultPDA(company: PublicKey): PublicKey {
 
 export function getPaymentPDA(company: PublicKey, nonce: number): PublicKey {
   const b = Buffer.alloc(8);
-  b.writeBigUInt64LE(BigInt(nonce));
+  let n = BigInt(nonce);
+  for (let i = 0; i < 8; i++) { b[i] = Number(n & 0xffn); n >>= 8n; }
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from("payment"), company.toBuffer(), b], programId
   );
