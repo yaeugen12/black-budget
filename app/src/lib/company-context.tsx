@@ -212,7 +212,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         authority: wallet.publicKey,
         company: compPDA,
         vault: vaultPDA,
-        usdcMint: new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"), // Devnet USDC (Token-2022)
+        usdcMint: new PublicKey("Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp"), // Our Token-2022 test USDC mint on devnet
         founderMember: memberPDA,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: new PublicKey("11111111111111111111111111111111"),
