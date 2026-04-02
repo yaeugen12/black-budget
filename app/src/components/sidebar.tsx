@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { useCompany } from "@/lib/company-context";
 import {
   LayoutDashboard, FileText, CheckCircle2, Users, Shield, Eye,
-  ArrowUpDown, ChevronRight, Menu, X,
+  ArrowUpDown, ChevronRight, Menu, X, Banknote,
 } from "lucide-react";
 
 const WalletMultiButton = dynamic(
@@ -19,6 +19,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Invoices", href: "/invoices", icon: FileText },
   { name: "Approvals", href: "/approvals", icon: CheckCircle2, badge: true },
+  { name: "Payroll", href: "/payroll", icon: Banknote },
   { name: "Payments", href: "/payments", icon: ArrowUpDown },
   { name: "Team", href: "/team", icon: Users },
   { name: "Policies", href: "/policies", icon: Shield },

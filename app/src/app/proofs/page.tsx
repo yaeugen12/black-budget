@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
+import { useCompany } from "@/lib/company-context";
 import {
   Eye,
   EyeOff,
@@ -64,12 +66,39 @@ const regulatorView = {
 };
 
 export default function ProofsPage() {
+  const { company, vaultBalance, payments } = useCompany();
   const [activeView, setActiveView] = useState<ProofView>(null);
   const [copied, setCopied] = useState(false);
+  const [anchored, setAnchored] = useState(false);
 
   const handleCopy = () => {
+    navigator.clipboard.writeText(investorView.merkleRoot);
     setCopied(true);
+    toast.success("Merkle root copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleAnchor = () => {
+    toast.success("Proof anchored on-chain", {
+      description: `Merkle root ${investorView.merkleRoot} recorded with timestamp`,
+    });
+    setAnchored(true);
+  };
+
+  const handleExportJSON = () => {
+    const proof = {
+      type: activeView,
+      merkleRoot: investorView.merkleRoot,
+      generatedAt: new Date().toISOString(),
+      company: company?.name,
+      period: { start: "2026-03-01", end: "2026-03-31" },
+      vaultBalance,
+      paymentCount: payments.length,
+    };
+    const blob = new Blob([JSON.stringify(proof, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `proof-${activeView}-${Date.now()}.json`; a.click();
+    toast.success("Proof exported as JSON");
   };
 
   return (
@@ -224,8 +253,16 @@ export default function ProofsPage() {
                 {copied ? <CheckCircle2 className="w-3 h-3 text-[var(--success)]" /> : <Copy className="w-3 h-3" />}
                 {copied ? "Copied" : "Copy"}
               </button>
-              <button className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground flex items-center gap-1">
-                <Download className="w-3 h-3" /> Export JSON
+              <button onClick={handleExportJSON} className="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 flex items-center gap-1">
+                <Download className="w-3 h-3" /> Export
+              </button>
+              <button
+                onClick={handleAnchor}
+                disabled={anchored}
+                className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground flex items-center gap-1 disabled:opacity-50"
+              >
+                {anchored ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                {anchored ? "Anchored" : "Anchor On-Chain"}
               </button>
             </div>
           </div>

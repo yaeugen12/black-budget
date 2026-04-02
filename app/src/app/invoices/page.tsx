@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Upload,
   FileText,
@@ -11,7 +11,10 @@ import {
   Loader2,
   X,
   Zap,
+  Clock,
+  History,
 } from "lucide-react";
+import { getInvoices, saveInvoice, isNewVendor, type StoredInvoice } from "@/lib/invoice-store";
 
 interface ParsedInvoice {
   vendor: string;
@@ -69,6 +72,9 @@ export default function InvoicesPage() {
   const [parsed, setParsed] = useState<ParsedInvoice | null>(null);
   const [policyResult, setPolicyResult] = useState<PolicyDecision | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [invoiceHistory, setInvoiceHistory] = useState<StoredInvoice[]>([]);
+
+  useEffect(() => { setInvoiceHistory(getInvoices()); }, [submitted]);
 
   const handleFile = useCallback(async (f: File) => {
     setFile(f);
@@ -94,8 +100,25 @@ export default function InvoicesPage() {
   );
 
   const handleSubmit = () => {
+    if (parsed && policyResult && file) {
+      saveInvoice({
+        id: Date.now().toString(),
+        fileName: file.name,
+        vendor: parsed.vendor,
+        amount: parsed.amount,
+        currency: parsed.currency,
+        dueDate: parsed.dueDate,
+        category: parsed.category,
+        lineItems: parsed.lineItems,
+        riskFlags: parsed.riskFlags,
+        confidence: parsed.confidence,
+        policyAction: policyResult.action,
+        policyReason: policyResult.reason,
+        createdAt: new Date().toISOString(),
+        status: policyResult.action === "auto_approve" ? "paid" : "submitted",
+      });
+    }
     setSubmitted(true);
-    // In production: create on-chain payment request
   };
 
   const reset = () => {
@@ -279,6 +302,43 @@ export default function InvoicesPage() {
           <button onClick={reset} className="mt-4 text-primary text-sm hover:underline">
             Upload another invoice
           </button>
+        </div>
+      )}
+
+      {/* Invoice History */}
+      {invoiceHistory.length > 0 && !parsing && (
+        <div className="card animate-in-delay-2">
+          <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+            <History className="w-4 h-4 text-primary" />
+            <h3 className="text-[13px] font-semibold">Invoice History</h3>
+            <span className="badge badge-neutral">{invoiceHistory.length}</span>
+          </div>
+          <div className="divide-y divide-border">
+            {invoiceHistory.slice(0, 10).map((inv) => (
+              <div key={inv.id} className="px-5 py-3 flex items-center justify-between hover:bg-[rgba(255,255,255,0.015)] transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${
+                    inv.status === "paid" ? "bg-success" : inv.status === "submitted" ? "bg-warning pulse-dot" : "bg-primary"
+                  }`} />
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium truncate">{inv.vendor}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {inv.fileName} · {inv.category} · {new Date(inv.createdAt).toLocaleDateString()}
+                      {isNewVendor(inv.vendor) ? "" : " · Known vendor"}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-4">
+                  <p className="text-[13px] font-mono font-medium">${inv.amount.toLocaleString()}</p>
+                  <span className={`badge ${
+                    inv.status === "paid" ? "badge-success" : inv.status === "submitted" ? "badge-warning" : "badge-info"
+                  }`}>
+                    {inv.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
