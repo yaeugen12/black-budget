@@ -47,10 +47,10 @@ const features = [
 ];
 
 const stats = [
-  { value: "916", label: "Lines of Rust" },
-  { value: "8", label: "App Pages" },
-  { value: "46", label: "Tests Passing" },
-  { value: "6", label: "On-Chain Instructions" },
+  { value: "1,300+", label: "Lines of Rust" },
+  { value: "10", label: "App Pages" },
+  { value: "54", label: "Tests Passing" },
+  { value: "10", label: "On-Chain Instructions" },
 ];
 
 const techStack = [

@@ -208,6 +208,7 @@ export default function Dashboard() {
             {payments.slice(0, 6).map((payment, i) => {
               const status = payment.account.status;
               const isPending = status.pending !== undefined;
+              const isApproved = status.approved !== undefined;
               const isExecuted = status.executed !== undefined;
               const isRejected = status.rejected !== undefined;
 
@@ -218,7 +219,7 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-2 h-2 rounded-full shrink-0 ${
-                      isExecuted ? "bg-success" : isPending ? "bg-warning pulse-dot" : "bg-destructive"
+                      isExecuted ? "bg-success" : isApproved ? "bg-primary" : isPending ? "bg-warning pulse-dot" : "bg-destructive"
                     }`} />
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium truncate">

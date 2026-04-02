@@ -228,9 +228,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const compPDA = getCompanyPDA(wallet.publicKey);
 
       const tx = await program.methods.setPolicies({
-        autoApproveLimit: new BN(policy.autoApproveLimit * 1_000_000),
-        dualApproveThreshold: new BN(policy.dualApproveThreshold * 1_000_000),
-        monthlyBurnCap: new BN(policy.monthlyBurnCap * 1_000_000),
+        autoApproveLimit: new BN(Math.round(policy.autoApproveLimit * 1_000_000)),
+        dualApproveThreshold: new BN(Math.round(policy.dualApproveThreshold * 1_000_000)),
+        monthlyBurnCap: new BN(Math.round(policy.monthlyBurnCap * 1_000_000)),
         requireVendorVerification: policy.requireVendorVerification,
         restrictToKnownRecipients: policy.restrictToKnownRecipients,
         minRunwayMonths: policy.minRunwayMonths,
@@ -248,23 +248,22 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const createPayment = useCallback(async (recipient: string, amount: number, category: string, memo: string) => {
     const program = getProgram();
-    if (!program || !wallet.publicKey || !company) throw new Error("Not ready");
+    if (!program || !wallet.publicKey || !company || !companyPDA) throw new Error("Not ready");
 
     return withToast(`Payment $${amount.toLocaleString()}`, async () => {
-      const compPDA = getCompanyPDA(wallet.publicKey);
       const nonce = company.paymentNonce.toNumber();
-      const paymentPDA = getPaymentPDA(compPDA, nonce);
+      const paymentPDA = getPaymentPDA(companyPDA, nonce);
       const encoder = new TextEncoder();
       const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(memo));
       const descriptionHash = Array.from(new Uint8Array(hashBuffer));
 
       const tx = await program.methods.createPayment(
-        new BN(amount * 1_000_000),
+        new BN(Math.round(amount * 1_000_000)),
         { [category]: {} },
         descriptionHash, memo.slice(0, 128), 0
       ).accounts({
-        requester: wallet.publicKey, company: compPDA,
-        requesterMember: getMemberPDA(compPDA, wallet.publicKey),
+        requester: wallet.publicKey, company: companyPDA,
+        requesterMember: getMemberPDA(companyPDA, wallet.publicKey),
         recipient: new PublicKey(recipient), payment: paymentPDA,
         systemProgram: SYSTEM,
       }).rpc();
@@ -272,7 +271,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       await refresh();
       return tx;
     });
-  }, [getProgram, wallet.publicKey, company, refresh]);
+  }, [getProgram, wallet.publicKey, company, companyPDA, refresh]);
 
   // ─── Approve Payment ──────────────────────────────────────────
 
@@ -361,7 +360,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         USDC_MINT,        // mint
         vaultPDA,         // to (vault)
         wallet.publicKey, // authority
-        BigInt(amount * 1_000_000), // amount in lamports
+        BigInt(Math.round(amount * 1_000_000)), // amount in lamports
         6,                // decimals
         [],               // signers
         TOKEN_2022_PROGRAM_ID
