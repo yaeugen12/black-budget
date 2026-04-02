@@ -34,8 +34,9 @@ pnpm dev
 
 **Run the tests:**
 ```bash
-pnpm test                  # 41 unit + integration tests (offline)
-node full-flow-test.mjs    # 5-step on-chain smoke test (needs devnet)
+pnpm test                              # 48 unit + integration tests (offline)
+node tests/record-proof-test.mjs       # 6 proof-specific on-chain tests
+node tests/full-flow-test.mjs          # 5-step payment flow on-chain test
 ```
 
 ---
@@ -111,7 +112,9 @@ This is critical for understanding the project's maturity:
 | Policy evaluation engine | **Live** | Rules engine evaluates every invoice against on-chain policies |
 | Selective disclosure proofs | **Live** | Real Merkle tree from on-chain payments, 3-tier views with pseudonymization |
 | Vault balance on dashboard | **Live** | Reads actual Token-2022 balance via RPC |
-| Multi-user approval flow | **Live** | Tested with 2 wallets: Owner creates, CFO approves (7/8 on-chain tests pass) |
+| Multi-user approval flow | **Live** | Tested with 2 wallets: Owner creates, CFO approves |
+| Proof on-chain anchoring | **Live** | `record_proof` (3 tiers) + `record_compliance_proof` (parametric queries) |
+| Programmable compliance proofs | **Live** | Prove "runway > 6mo" or "no vendor > 40%" without revealing data |
 | Payroll batch execution | **Live** | Sequential batch with live progress, TX log with Explorer links |
 | Monthly spend reset | **Live** | Lazy reset in Solana program — resets when month changes, emits event |
 
@@ -120,7 +123,7 @@ This is critical for understanding the project's maturity:
 | Feature | Current State | Production Path |
 |---------|--------------|-----------------|
 | Confidential transfer amounts | Token-2022 CT extension enabled on mint; actual transfers use standard `transfer_checked` | Solana's ZK ElGamal Proof program is currently disabled on devnet. When re-enabled, encrypted transfers work with zero code changes |
-| Proof on-chain anchoring | Merkle root computed client-side from real data | Add `ProofRecord` PDA — program instruction exists in state but not yet wired to UI |
+| Proof on-chain anchoring | **Live** — `record_proof` and `record_compliance_proof` instructions, wired to UI with Anchor button | — |
 | Invoice file storage | localStorage + Supabase (optional) | S3/R2 for PDFs, Supabase for metadata |
 
 ---
@@ -168,30 +171,32 @@ All three views share the same Merkle root — cryptographic proof they come fro
 
 ```
 black-budget/
-├── programs/black_budget/     # Solana program (Anchor/Rust) — 916 lines
+├── programs/black_budget/     # Solana program (Anchor/Rust) — 1,300+ lines
 │   └── src/
-│       ├── instructions/      # init_company, payments, policies, members
-│       └── state/             # Company, Member, PaymentRequest, ProofRecord
-├── app/                       # Next.js frontend — 1,658 lines
+│       ├── instructions/      # 10 instructions: payments, proofs, compliance, policies, members
+│       └── state/             # Company, Member, PaymentRequest, ProofRecord, ComplianceProof
+├── app/                       # Next.js frontend
 │   └── src/
-│       ├── app/               # 7 pages + API route
+│       ├── app/               # 10 pages + API route (incl. compliance proofs)
 │       ├── components/        # Sidebar, Onboarding, AppShell
-│       └── lib/               # IDL, Anchor hooks, CompanyContext
-├── server/                    # Express backend — 445 lines
+│       └── lib/               # IDL, CompanyContext, Merkle, Compliance engine
+├── server/                    # Express backend
 │   └── src/services/          # invoice-parser, rule-engine, proof-generator
-└── tests/                     # Full-flow on-chain test
+└── tests/                     # E2E on-chain tests (proof + payment flow)
 ```
 
 ## Tests
 
-**46 tests total across 5 layers:**
+**54 tests total across 7 layers:**
 
 | Layer | Tests | What it covers |
 |-------|-------|---------------|
 | Rule Engine | 16 | Policy decisions: thresholds, burn cap, vendor verification, edge cases |
-| PDA Derivation | 11 | Deterministic addresses, cross-company isolation, nonce uniqueness |
-| IDL Integrity | 10 | Discriminator correctness (SHA-256), type resolution, completeness |
-| API Integration | 4 | AI parsing end-to-end, error handling, policy response |
+| PDA Derivation | 15 | Company, vault, member, payment, proof PDAs — determinism + isolation |
+| IDL Integrity | 11 | 10 instructions, 5 account types, discriminator correctness (SHA-256) |
+| Merkle | 3 | Tree construction, pseudonymization, hash abbreviation |
+| API Integration | 3 | AI parsing end-to-end, error handling, policy response |
+| On-Chain Proofs | 6 | 3 proof types, data verification, duplicate rejection, contractor rejection |
 | On-Chain Flow | 5 | Create company → set policies → create payment → execute → verify |
 
 ## Deployed Addresses (Devnet)
@@ -199,8 +204,7 @@ black-budget/
 | What | Address |
 |------|---------|
 | Program | `3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k` |
-| USDC Mint (Confidential) | `Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF` |
-| USDC Mint (Standard) | `Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp` |
+| USDC Mint (Token-2022 + CT) | `Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF` |
 | Deploy Authority | `HGVzMKLxYYKFoy8XpGbCJjFYa739KndS8FYrnLnR9Es` |
 
 ## License

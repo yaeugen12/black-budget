@@ -14,14 +14,14 @@
 
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
-import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import fs from "fs";
 
 // ─── Config ─────────────────────────────────────────────────────────
 
 const RPC = "https://api.devnet.solana.com";
 const PROGRAM_ID = new PublicKey("3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k");
-const USDC_MINT = new PublicKey("Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp");
+const USDC_MINT = new PublicKey("Fc4uFQAaT38mwx6ELhp8GXHsuRBsyYPuW3Ltcn4y7meF");
 const SYSTEM = new PublicKey("11111111111111111111111111111111");
 
 // ─── IDL (minimal, just what we need) ───────────────────────────────
@@ -76,8 +76,11 @@ const IDL = {
         { name: "payment", writable: true },
         { name: "vault", writable: true },
         { name: "recipient_token_account", writable: true },
+        { name: "recipient" },
         { name: "usdc_mint" },
         { name: "token_program" },
+        { name: "associated_token_program" },
+        { name: "system_program", address: SYSTEM.toBase58() },
       ],
       args: [],
     },
@@ -303,8 +306,11 @@ async function main() {
             payment: paymentPDA,
             vault: vaultPDA,
             recipientTokenAccount: recipientATA,
+            recipient: recipient.publicKey,
             usdcMint: USDC_MINT,
             tokenProgram: TOKEN_2022_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: SYSTEM,
           })
           .rpc();
 
@@ -318,7 +324,11 @@ async function main() {
       } catch (e) {
         log("4", `FAIL — ${e.message}`);
         if (e.logs) e.logs.slice(-5).forEach((l) => console.log("    ", l));
-        log("4", `(Execute may fail if recipient ATA doesn't exist — expected for test)`);
+        if (e.message.includes("TokenMint") || e.message.includes("OwnedByWrongProgram")) {
+          log("4", `(Vault was initialized with a different USDC mint — re-create company to fix)`);
+        } else {
+          log("4", `(Execute may fail if vault has no USDC balance)`);
+        }
         failed++;
       }
     } else {
