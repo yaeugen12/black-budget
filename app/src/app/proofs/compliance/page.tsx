@@ -91,7 +91,7 @@ function buildConstraint(kind: Constraint["kind"], operator: Operator, value: nu
 }
 
 export default function ComplianceProofsPage() {
-  const { company, companyPDA, vaultBalance, payments, anchorProof } = useCompany();
+  const { company, companyPDA, vaultBalance, payments, anchorComplianceProof } = useCompany();
   const wallet = useWallet();
 
   const [result, setResult] = useState<ComplianceResult | null>(null);
@@ -180,10 +180,13 @@ export default function ComplianceProofsPage() {
       const periodStart = now - 86400 * 30;
       const periodEnd = now;
 
-      const tx = await anchorProof(
-        "investor",
+      const tx = await anchorComplianceProof(
+        constraintHashBytes,
         merkleRootBytes,
+        result.passed,
         result.paymentCount,
+        periodStart,
+        periodEnd,
       );
       setAnchoredTx(tx);
     } catch (e) {

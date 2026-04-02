@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Shield, Save, Zap, AlertTriangle, Lock, CheckCircle2, Loader2 } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 
@@ -38,6 +38,19 @@ export default function PoliciesPage() {
     }
     return defaultPolicies;
   });
+
+  useEffect(() => {
+    if (company) {
+      setPolicies({
+        autoApproveLimit: company.policy.autoApproveLimit.toNumber() / 1_000_000,
+        dualApproveThreshold: company.policy.dualApproveThreshold.toNumber() / 1_000_000,
+        monthlyBurnCap: company.policy.monthlyBurnCap.toNumber() / 1_000_000,
+        requireVendorVerification: company.policy.requireVendorVerification,
+        restrictToKnownRecipients: company.policy.restrictToKnownRecipients,
+        minRunwayMonths: company.policy.minRunwayMonths,
+      });
+    }
+  }, [company]);
 
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);

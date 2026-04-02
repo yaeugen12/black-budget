@@ -49,6 +49,7 @@ pub struct InitCompany<'info> {
 }
 
 pub fn handle_init_company(ctx: Context<InitCompany>, name: String) -> Result<()> {
+    require!(name.len() > 0, ErrorCode::NameTooShort);
     require!(name.len() <= MAX_NAME_LEN, ErrorCode::NameTooLong);
 
     let clock = Clock::get()?;
@@ -83,6 +84,8 @@ pub fn handle_init_company(ctx: Context<InitCompany>, name: String) -> Result<()
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Company name must not be empty")]
+    NameTooShort,
     #[msg("Company name exceeds maximum length")]
     NameTooLong,
 }

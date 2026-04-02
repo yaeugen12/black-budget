@@ -170,6 +170,13 @@ function randomMerkleRoot() {
   return root;
 }
 
+function isFallbackError(error) {
+  return (
+    error.message.includes("InstructionFallbackNotFound") ||
+    error.logs?.some((line) => line.includes("InstructionFallbackNotFound"))
+  );
+}
+
 async function ensureCompany(program, owner, companyPDA, memberPDA) {
   try {
     const company = await program.account.company.fetch(companyPDA);
@@ -294,6 +301,10 @@ async function main() {
       failed++;
     }
   } catch (e) {
+    if (isFallbackError(e)) {
+      log("1", "FAIL — Devnet program does not include record_proof yet. Deploy the updated program first.");
+      process.exit(1);
+    }
     log("1", `FAIL — ${e.message}`);
     if (e.logs) e.logs.slice(-5).forEach((l) => console.log("    ", l));
     failed++;
@@ -331,6 +342,10 @@ async function main() {
       failed++;
     }
   } catch (e) {
+    if (isFallbackError(e)) {
+      log("3", "FAIL — Devnet program does not include record_proof yet. Deploy the updated program first.");
+      process.exit(1);
+    }
     log("3", `FAIL — ${e.message}`);
     if (e.logs) e.logs.slice(-5).forEach((l) => console.log("    ", l));
     failed++;
@@ -368,6 +383,10 @@ async function main() {
       failed++;
     }
   } catch (e) {
+    if (isFallbackError(e)) {
+      log("4", "FAIL — Devnet program does not include record_proof yet. Deploy the updated program first.");
+      process.exit(1);
+    }
     log("4", `FAIL — ${e.message}`);
     if (e.logs) e.logs.slice(-5).forEach((l) => console.log("    ", l));
     failed++;
@@ -396,12 +415,16 @@ async function main() {
     log("5", "FAIL — Should have thrown (duplicate PDA)");
     failed++;
   } catch (e) {
-    if (e.message.includes("already in use") || e.logs?.some((l) => l.includes("already in use"))) {
+    if (isFallbackError(e)) {
+      log("5", "FAIL — Duplicate-proof check is blocked because devnet is still running the old program.");
+      failed++;
+    } else if (e.message.includes("already in use") || e.logs?.some((l) => l.includes("already in use"))) {
       log("5", "PASS — Correctly rejected duplicate proof (account already in use)");
+      passed++;
     } else {
       log("5", `PASS — Correctly rejected (${e.message.slice(0, 60)}...)`);
+      passed++;
     }
-    passed++;
   }
 
   console.log("\n─── Test 6: Contractor Cannot Export Proofs ───");
@@ -459,12 +482,16 @@ async function main() {
     log("6", "FAIL — Contractor should not be able to export proofs");
     failed++;
   } catch (e) {
-    if (e.message.includes("CannotExportProofs") || e.logs?.some((l) => l.includes("CannotExportProofs"))) {
+    if (isFallbackError(e)) {
+      log("6", "FAIL — Contractor rejection check is blocked because devnet is still running the old program.");
+      failed++;
+    } else if (e.message.includes("CannotExportProofs") || e.logs?.some((l) => l.includes("CannotExportProofs"))) {
       log("6", "PASS — Contractor correctly rejected (CannotExportProofs)");
+      passed++;
     } else {
       log("6", `PASS — Contractor rejected (${e.message.slice(0, 60)}...)`);
+      passed++;
     }
-    passed++;
   }
 
   console.log("\n╔══════════════════════════════════════════════╗");

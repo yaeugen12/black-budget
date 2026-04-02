@@ -14,6 +14,8 @@ import {
   History,
 } from "lucide-react";
 import { getInvoicesSync, saveInvoice, isNewVendor, type StoredInvoice } from "@/lib/invoice-store";
+import { useCompany } from "@/lib/company-context";
+import { toast } from "sonner";
 
 interface ParsedInvoice {
   vendor: string;
@@ -65,6 +67,7 @@ async function parseInvoiceAI(file: File): Promise<{ invoice: ParsedInvoice; pol
 }
 
 export default function InvoicesPage() {
+  const { createPayment } = useCompany();
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -82,10 +85,15 @@ export default function InvoicesPage() {
     setPolicyResult(null);
     setSubmitted(false);
 
-    const { invoice, policy } = await parseInvoiceAI(f);
-    setParsed(invoice);
-    setPolicyResult(policy);
-    setParsing(false);
+    try {
+      const { invoice, policy } = await parseInvoiceAI(f);
+      setParsed(invoice);
+      setPolicyResult(policy);
+    } catch (e) {
+      toast.error("Failed to parse invoice");
+    } finally {
+      setParsing(false);
+    }
   }, []);
 
   const handleDrop = useCallback(
@@ -98,7 +106,7 @@ export default function InvoicesPage() {
     [handleFile]
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (parsed && policyResult && file) {
       saveInvoice({
         id: Date.now().toString(),
@@ -116,6 +124,15 @@ export default function InvoicesPage() {
         createdAt: new Date().toISOString(),
         status: policyResult.action === "auto_approve" ? "paid" : "submitted",
       });
+
+      // Create on-chain payment if we have recipient and amount
+      if (parsed.vendor && parsed.amount) {
+        try {
+          await createPayment(parsed.vendor, parsed.amount, parsed.category || "vendor", `Invoice payment: ${file.name}`);
+        } catch (e) {
+          console.error("On-chain payment failed:", e);
+        }
+      }
     }
     setSubmitted(true);
   };

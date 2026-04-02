@@ -243,6 +243,11 @@ pub fn handle_approve_payment(ctx: Context<ApprovePayment>) -> Result<()> {
     let approver_key = ctx.accounts.approver.key();
 
     require!(
+        approver_key != payment.requester,
+        PaymentError::CannotApproveSelf
+    );
+
+    require!(
         !payment.approvals.contains(&approver_key),
         PaymentError::AlreadyApproved
     );
@@ -387,6 +392,11 @@ pub fn handle_execute_payment(ctx: Context<ExecutePayment>) -> Result<()> {
     // Lazy monthly reset
     maybe_reset_monthly_spend(company, &clock);
 
+    require!(
+        ctx.accounts.vault.amount >= payment.amount,
+        PaymentError::InsufficientVaultBalance
+    );
+
     // Transfer USDC from vault to recipient
     let authority_key = company.authority;
     let company_bump = company.bump;
@@ -459,4 +469,8 @@ pub enum PaymentError {
     RunwayTooLow,
     #[msg("Recipient does not match payment")]
     WrongRecipient,
+    #[msg("Cannot approve your own payment")]
+    CannotApproveSelf,
+    #[msg("Vault has insufficient balance")]
+    InsufficientVaultBalance,
 }

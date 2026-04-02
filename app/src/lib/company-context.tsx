@@ -67,6 +67,7 @@ interface CompanyContextType {
   setPolicies: (policy: any) => Promise<string>;
   createPayment: (recipient: string, amount: number, category: string, memo: string) => Promise<string>;
   approvePayment: (paymentId: number) => Promise<string>;
+  executePayment: (paymentId: number, recipientPubkey: string) => Promise<string>;
   rejectPayment: (paymentId: number) => Promise<string>;
   depositToVault: (amount: number) => Promise<string>;
   anchorProof: (proofType: string, merkleRoot: number[], paymentCount: number) => Promise<string>;
@@ -143,6 +144,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       setPayments(allPayments);
       setError(null);
     } catch (e: any) {
+      console.error("Refresh failed:", e);
+      setError(e instanceof Error ? e.message : "Failed to load company data");
       setCompany(null); setPayments([]); setVaultBalance(0);
     } finally {
       setLoading(false);
@@ -283,6 +286,34 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         approver: wallet.publicKey, company: compPDA,
         approverMember: getMemberPDA(compPDA, wallet.publicKey),
         payment: getPaymentPDA(compPDA, paymentId),
+      }).rpc();
+      await refresh();
+      return tx;
+    });
+  }, [getProgram, wallet.publicKey, company, refresh]);
+
+  // ─── Execute Payment ─────────────────────────────────────────
+
+  const executePayment = useCallback(async (paymentId: number, recipientPubkey: string) => {
+    const program = getProgram();
+    if (!program || !wallet.publicKey || !company) throw new Error("Not ready");
+
+    return withToast("Execute payment", async () => {
+      const compPDA = getCompanyPDA(company.authority);
+      const recipientKey = new PublicKey(recipientPubkey);
+      const recipientATA = getAssociatedTokenAddressSync(
+        USDC_MINT, recipientKey, true, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      const tx = await program.methods.executePayment().accounts({
+        executor: wallet.publicKey,
+        company: compPDA,
+        executorMember: getMemberPDA(compPDA, wallet.publicKey),
+        payment: getPaymentPDA(compPDA, paymentId),
+        vault: getVaultPDA(compPDA),
+        recipientTokenAccount: recipientATA,
+        usdcMint: USDC_MINT,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
       }).rpc();
       await refresh();
       return tx;
@@ -444,7 +475,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     <CompanyContext.Provider value={{
       loading, company, companyPDA, vaultBalance, payments, error,
       initializeCompany, addMember, setPolicies, createPayment,
-      approvePayment, rejectPayment, depositToVault, anchorProof, anchorComplianceProof, refresh,
+      approvePayment, executePayment, rejectPayment, depositToVault, anchorProof, anchorComplianceProof, refresh,
     }}>
       {children}
     </CompanyContext.Provider>

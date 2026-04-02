@@ -1,6 +1,8 @@
+// @ts-nocheck
 "use client";
 
 import { useState } from "react";
+import { useCompany } from "@/lib/company-context";
 import {
   CheckCircle2,
   Clock,
@@ -8,44 +10,55 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  Ban,
+  Loader2,
 } from "lucide-react";
 
-interface Payment {
-  id: string;
-  vendor: string;
-  amount: number;
-  category: string;
-  status: "executed" | "pending" | "rejected";
-  approvals: string[];
-  requiredApprovals: number;
-  createdAt: string;
-  executedAt?: string;
-  txHash?: string;
-  confidential: boolean;
-}
-
-const payments: Payment[] = [
-  { id: "BB-023", vendor: "Acme Design Co.", amount: 3200, category: "Contractor", status: "executed", approvals: [], requiredApprovals: 0, createdAt: "2026-03-28", executedAt: "2026-03-28", txHash: "5Kx7...mN2f", confidential: true },
-  { id: "BB-024", vendor: "AWS Infrastructure", amount: 12800, category: "Subscription", status: "pending", approvals: ["3Bf2...mN8k"], requiredApprovals: 2, createdAt: "2026-03-28", confidential: false },
-  { id: "BB-022", vendor: "March Payroll Batch", amount: 28500, category: "Payroll", status: "executed", approvals: ["7Ke4...x9Fm", "3Bf2...mN8k"], requiredApprovals: 2, createdAt: "2026-03-25", executedAt: "2026-03-25", txHash: "9Ht3...pL5w", confidential: true },
-  { id: "BB-025", vendor: "Legal Advisory LLC", amount: 7500, category: "Vendor", status: "pending", approvals: [], requiredApprovals: 1, createdAt: "2026-03-27", confidential: false },
-  { id: "BB-021", vendor: "Figma Pro", amount: 45, category: "Subscription", status: "executed", approvals: [], requiredApprovals: 0, createdAt: "2026-03-22", executedAt: "2026-03-22", txHash: "2Wm8...bQ4k", confidential: true },
-  { id: "BB-020", vendor: "Sprint 11 Backend", amount: 4800, category: "Contractor", status: "executed", approvals: ["3Bf2...mN8k"], requiredApprovals: 1, createdAt: "2026-03-18", executedAt: "2026-03-18", txHash: "7Nj5...xR1v", confidential: true },
-  { id: "BB-019", vendor: "Office Rent (co-working)", amount: 2100, category: "Vendor", status: "rejected", approvals: [], requiredApprovals: 1, createdAt: "2026-03-15", confidential: false },
-  { id: "BB-018", vendor: "Vercel Pro", amount: 320, category: "Subscription", status: "executed", approvals: [], requiredApprovals: 0, createdAt: "2026-03-12", executedAt: "2026-03-12", txHash: "4Gp2...sM9e", confidential: true },
-];
-
-const statusConfig = {
-  executed: { icon: CheckCircle2, color: "text-[var(--success)]", bg: "badge-success", label: "Executed" },
-  pending: { icon: Clock, color: "text-[var(--warning)]", bg: "badge-warning", label: "Pending" },
-  rejected: { icon: XCircle, color: "text-destructive", bg: "badge-danger", label: "Rejected" },
+const statusConfig: Record<string, { icon: any; color: string; bg: string; label: string }> = {
+  pending:   { icon: Clock,        color: "text-[var(--warning)]",  bg: "badge-warning", label: "Pending" },
+  approved:  { icon: CheckCircle2, color: "text-[var(--success)]",  bg: "badge-success", label: "Approved" },
+  executed:  { icon: CheckCircle2, color: "text-[var(--success)]",  bg: "badge-success", label: "Executed" },
+  rejected:  { icon: XCircle,      color: "text-destructive",       bg: "badge-danger",  label: "Rejected" },
+  cancelled: { icon: Ban,          color: "text-muted-foreground",  bg: "bg-secondary",  label: "Cancelled" },
 };
 
+function truncatePubkey(key: string): string {
+  if (key.length <= 10) return key;
+  return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
+
 export default function PaymentsPage() {
+  const { payments, loading } = useCompany();
   const [amountsVisible, setAmountsVisible] = useState(true);
   const [filter, setFilter] = useState<string>("all");
 
-  const filtered = filter === "all" ? payments : payments.filter((p) => p.status === filter);
+  const rows = payments.map((p) => {
+    const acct = p.account;
+    const status = Object.keys(acct.status)[0].toLowerCase();
+    const category = Object.keys(acct.category)[0];
+    return {
+      publicKey: p.publicKey.toBase58(),
+      paymentId: acct.paymentId.toNumber(),
+      id: `BB-${String(acct.paymentId.toNumber() + 1).padStart(3, "0")}`,
+      recipient: truncatePubkey(acct.recipient.toBase58()),
+      amount: acct.amount.toNumber() / 1_000_000,
+      category: category.charAt(0).toUpperCase() + category.slice(1),
+      status,
+      memo: acct.memo,
+      createdAt: new Date(acct.createdAt.toNumber() * 1000).toLocaleDateString(),
+      riskScore: acct.riskScore,
+    };
+  });
+
+  const filtered = filter === "all" ? rows : rows.filter((p) => p.status === filter);
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -53,7 +66,7 @@ export default function PaymentsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Payment History</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {payments.length} total payments · {payments.filter((p) => p.confidential).length} confidential transfers
+            {rows.length} total payments
           </p>
         </div>
         <button
@@ -67,7 +80,7 @@ export default function PaymentsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        {["all", "executed", "pending", "rejected"].map((f) => (
+        {["all", "executed", "approved", "pending", "rejected"].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -83,55 +96,49 @@ export default function PaymentsPage() {
       </div>
 
       {/* Payment List */}
-      <div className="glass rounded-xl overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase">
-              <th className="px-5 py-3">ID</th>
-              <th className="px-5 py-3">Vendor</th>
-              <th className="px-5 py-3">Category</th>
-              <th className="px-5 py-3">Status</th>
-              <th className="px-5 py-3">Date</th>
-              <th className="px-5 py-3 text-right">Amount</th>
-              <th className="px-5 py-3 text-right">TX</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((payment) => {
-              const config = statusConfig[payment.status];
-              const StatusIcon = config.icon;
-              return (
-                <tr key={payment.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                  <td className="px-5 py-4 font-mono text-xs">{payment.id}</td>
-                  <td className="px-5 py-4 text-sm font-medium">{payment.vendor}</td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground">{payment.category}</td>
-                  <td className="px-5 py-4">
-                    <span className={`${config.bg} text-xs px-2 py-1 rounded flex items-center gap-1 w-fit`}>
-                      <StatusIcon className="w-3 h-3" />
-                      {config.label}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground">{payment.createdAt}</td>
-                  <td className="px-5 py-4 text-right font-mono text-sm">
-                    {amountsVisible ? `$${payment.amount.toLocaleString()}` : "•••••"}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    {payment.txHash ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-primary font-mono cursor-pointer hover:underline">
-                        {payment.confidential && <Eye className="w-3 h-3" />}
-                        {payment.txHash}
-                        <ExternalLink className="w-3 h-3" />
+      {filtered.length === 0 ? (
+        <div className="glass rounded-xl p-10 text-center">
+          <p className="text-muted-foreground">No payments found</p>
+        </div>
+      ) : (
+        <div className="glass rounded-xl overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase">
+                <th className="px-5 py-3">ID</th>
+                <th className="px-5 py-3">Recipient</th>
+                <th className="px-5 py-3">Category</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Date</th>
+                <th className="px-5 py-3 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((payment) => {
+                const config = statusConfig[payment.status] || statusConfig.pending;
+                const StatusIcon = config.icon;
+                return (
+                  <tr key={payment.publicKey} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                    <td className="px-5 py-4 font-mono text-xs">{payment.id}</td>
+                    <td className="px-5 py-4 text-sm font-mono text-muted-foreground">{payment.recipient}</td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground">{payment.category}</td>
+                    <td className="px-5 py-4">
+                      <span className={`${config.bg} text-xs px-2 py-1 rounded flex items-center gap-1 w-fit`}>
+                        <StatusIcon className="w-3 h-3" />
+                        {config.label}
                       </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground">{payment.createdAt}</td>
+                    <td className="px-5 py-4 text-right font-mono text-sm">
+                      {amountsVisible ? `$${payment.amount.toLocaleString()}` : "-----"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -105,6 +105,7 @@ pub struct RemoveMember<'info> {
 
 pub fn handle_remove_member(ctx: Context<RemoveMember>) -> Result<()> {
     let member = &mut ctx.accounts.target_member;
+    require!(member.is_active, MemberError::MemberAlreadyInactive);
     member.is_active = false;
     ctx.accounts.company.member_count -= 1;
 
@@ -126,4 +127,6 @@ pub enum MemberError {
     WrongCompany,
     #[msg("Cannot remove yourself")]
     CannotRemoveSelf,
+    #[msg("Member is already inactive")]
+    MemberAlreadyInactive,
 }

@@ -59,6 +59,8 @@ pub fn handle_record_proof(
     period_start: i64,
     period_end: i64,
 ) -> Result<()> {
+    require!(period_start < period_end, ProofError::InvalidPeriod);
+
     let clock = Clock::get()?;
 
     let record = &mut ctx.accounts.proof_record;
@@ -98,4 +100,6 @@ pub enum ProofError {
     MemberInactive,
     #[msg("Member cannot export proofs")]
     CannotExportProofs,
+    #[msg("Period start must be before period end")]
+    InvalidPeriod,
 }

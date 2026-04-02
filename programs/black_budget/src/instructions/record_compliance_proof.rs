@@ -62,6 +62,8 @@ pub fn handle_record_compliance_proof(
     period_start: i64,
     period_end: i64,
 ) -> Result<()> {
+    require!(period_start < period_end, ComplianceProofError::InvalidPeriod);
+
     let clock = Clock::get()?;
 
     let proof = &mut ctx.accounts.compliance_proof;
@@ -103,4 +105,6 @@ pub enum ComplianceProofError {
     MemberInactive,
     #[msg("Member cannot export proofs")]
     CannotExportProofs,
+    #[msg("Period start must be before period end")]
+    InvalidPeriod,
 }
