@@ -20,8 +20,11 @@ import { useState } from "react";
 import { useCompany } from "@/lib/company-context";
 
 export default function Dashboard() {
-  const { company, companyPDA, payments } = useCompany();
+  const { company, companyPDA, payments, vaultBalance, depositToVault } = useCompany();
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositing, setDepositing] = useState(false);
 
   const totalSpent = company ? company.totalSpent.toNumber() / 1_000_000 : 0;
   const monthlySpent = company ? company.monthlySpent.toNumber() / 1_000_000 : 0;
@@ -29,8 +32,18 @@ export default function Dashboard() {
   const memberCount = company ? company.memberCount : 1;
   const paymentCount = company ? company.paymentNonce.toNumber() : 0;
   const pendingPayments = payments.filter((p) => p.account.status.pending !== undefined);
-  const vaultBalance = 284_750 - totalSpent;
   const runway = monthlySpent > 0 ? vaultBalance / monthlySpent : 99;
+
+  const handleDeposit = async () => {
+    const amt = parseFloat(depositAmount);
+    if (!amt || amt <= 0) return;
+    setDepositing(true);
+    try {
+      await depositToVault(amt);
+      setShowDeposit(false);
+      setDepositAmount("");
+    } catch {} finally { setDepositing(false); }
+  };
 
   const fmt = (n: number) => balanceVisible ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 0 })}` : "--------";
 
@@ -59,11 +72,36 @@ export default function Dashboard() {
           >
             {balanceVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
+          <button onClick={() => setShowDeposit(!showDeposit)} className="btn-secondary text-[13px] py-2 px-4">
+            <ArrowUpRight className="w-4 h-4" /> Deposit
+          </button>
           <Link href="/invoices" className="btn-primary text-[13px] py-2 px-4">
             <Plus className="w-4 h-4" /> New Payment
           </Link>
         </div>
       </div>
+
+      {/* Deposit USDC */}
+      {showDeposit && (
+        <div className="card p-4 flex items-center gap-3 animate-in">
+          <input
+            type="number"
+            placeholder="Amount (USDC)"
+            value={depositAmount}
+            onChange={(e) => setDepositAmount(e.target.value)}
+            className="input flex-1 max-w-[200px]"
+            min="1"
+          />
+          <button
+            onClick={handleDeposit}
+            disabled={depositing || !depositAmount}
+            className="btn-primary text-[13px] py-2 px-4"
+          >
+            {depositing ? "Sending..." : "Deposit to Vault"}
+          </button>
+          <button onClick={() => setShowDeposit(false)} className="btn-ghost text-[13px]">Cancel</button>
+        </div>
+      )}
 
       {/* Alerts */}
       {pendingPayments.length > 0 && (

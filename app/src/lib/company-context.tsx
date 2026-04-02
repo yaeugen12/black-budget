@@ -3,113 +3,71 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
-import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+} from "@solana/spl-token";
+import { toast } from "sonner";
 import { IDL, PROGRAM_ID } from "./idl";
 
 const programId = new PublicKey(PROGRAM_ID);
+export const USDC_MINT = new PublicKey("Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp");
+const SYSTEM = new PublicKey("11111111111111111111111111111111");
 
-// ─── PDA helpers ────────────────────────────────────────────────────
+// ─── PDA helpers (exported for reuse) ───────────────────────────────
 
-function getCompanyPDA(authority: PublicKey): PublicKey {
+export function getCompanyPDA(authority: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("company"), authority.toBuffer()],
-    programId
+    [Buffer.from("company"), authority.toBuffer()], programId
   );
   return pda;
 }
 
-function getMemberPDA(company: PublicKey, wallet: PublicKey): PublicKey {
+export function getMemberPDA(company: PublicKey, wallet: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("member"), company.toBuffer(), wallet.toBuffer()],
-    programId
+    [Buffer.from("member"), company.toBuffer(), wallet.toBuffer()], programId
   );
   return pda;
 }
 
-function getVaultPDA(company: PublicKey): PublicKey {
+export function getVaultPDA(company: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("vault"), company.toBuffer()],
-    programId
+    [Buffer.from("vault"), company.toBuffer()], programId
   );
   return pda;
 }
 
-function getPaymentPDA(company: PublicKey, nonce: number): PublicKey {
-  const nonceBuffer = Buffer.alloc(8);
-  nonceBuffer.writeBigUInt64LE(BigInt(nonce));
+export function getPaymentPDA(company: PublicKey, nonce: number): PublicKey {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(BigInt(nonce));
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("payment"), company.toBuffer(), nonceBuffer],
-    programId
+    [Buffer.from("payment"), company.toBuffer(), b], programId
   );
   return pda;
 }
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-interface CompanyData {
-  authority: PublicKey;
-  name: string;
-  vault: PublicKey;
-  policy: {
-    autoApproveLimit: BN;
-    dualApproveThreshold: BN;
-    monthlyBurnCap: BN;
-    requireVendorVerification: boolean;
-    restrictToKnownRecipients: boolean;
-    minRunwayMonths: number;
-  };
-  memberCount: number;
-  paymentNonce: BN;
-  totalSpent: BN;
-  monthlySpent: BN;
-  createdAt: BN;
-}
-
-interface MemberData {
-  company: PublicKey;
-  wallet: PublicKey;
-  role: { owner?: {} } | { approver?: {} } | { viewer?: {} } | { contractor?: {} };
-  label: string;
-  addedAt: BN;
-  isActive: boolean;
-}
-
-interface PaymentData {
-  publicKey: PublicKey;
-  account: {
-    company: PublicKey;
-    requester: PublicKey;
-    recipient: PublicKey;
-    amount: BN;
-    category: any;
-    memo: string;
-    status: any;
-    approvals: PublicKey[];
-    requiredApprovals: number;
-    paymentId: BN;
-    riskScore: number;
-    createdAt: BN;
-    executedAt: BN;
-  };
-}
-
 interface CompanyContextType {
-  // State
   loading: boolean;
-  company: CompanyData | null;
+  company: any | null;
   companyPDA: PublicKey | null;
-  payments: PaymentData[];
+  vaultBalance: number;       // Real USDC balance (human readable)
+  payments: any[];
   error: string | null;
 
-  // Actions
   initializeCompany: (name: string) => Promise<string>;
   addMember: (wallet: string, role: string, label: string) => Promise<string>;
   setPolicies: (policy: any) => Promise<string>;
   createPayment: (recipient: string, amount: number, category: string, memo: string) => Promise<string>;
   approvePayment: (paymentId: number) => Promise<string>;
   rejectPayment: (paymentId: number) => Promise<string>;
+  depositToVault: (amount: number) => Promise<string>;
   refresh: () => Promise<void>;
 }
 
@@ -129,33 +87,30 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => { setMounted(true); }, []);
-  const [company, setCompany] = useState<CompanyData | null>(null);
+  const [company, setCompany] = useState<any | null>(null);
   const [companyPDA, setCompanyPDA] = useState<PublicKey | null>(null);
-  const [payments, setPayments] = useState<PaymentData[]>([]);
+  const [vaultBalance, setVaultBalance] = useState<number>(0);
+  const [payments, setPayments] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Build program
+  useEffect(() => { setMounted(true); }, []);
+
   const getProgram = useCallback(() => {
     if (!mounted || !wallet.publicKey || !wallet.signTransaction) return null;
     try {
-      const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
-      return new Program(IDL as any, provider);
+      const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed" });
+      return new Program(IDL, provider);
     } catch (e) {
       console.error("Failed to create Program:", e);
       return null;
     }
   }, [mounted, connection, wallet]);
 
-  // ─── Fetch company data ───────────────────────────────────────
+  // ─── Fetch all data ───────────────────────────────────────────
 
   const refresh = useCallback(async () => {
     if (!mounted || !wallet.publicKey) {
-      setCompany(null);
-      setCompanyPDA(null);
-      setPayments([]);
-      setLoading(false);
+      setCompany(null); setCompanyPDA(null); setPayments([]); setVaultBalance(0); setLoading(false);
       return;
     }
 
@@ -167,31 +122,46 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       setCompanyPDA(pda);
 
       const data = await program.account.company.fetch(pda);
-      setCompany(data as CompanyData);
+      setCompany(data);
+
+      // Real vault balance
+      const vault = getVaultPDA(pda);
+      try {
+        const vaultInfo = await connection.getTokenAccountBalance(vault);
+        setVaultBalance(Number(vaultInfo.value.uiAmount || 0));
+      } catch {
+        setVaultBalance(0);
+      }
 
       // Fetch payments
       const allPayments = await program.account.paymentRequest.all([
         { memcmp: { offset: 8, bytes: pda.toBase58() } },
       ]);
-      setPayments(allPayments as PaymentData[]);
+      setPayments(allPayments);
       setError(null);
     } catch (e: any) {
-      if (e.message?.includes("Account does not exist")) {
-        setCompany(null);
-        setPayments([]);
-      } else {
-        console.log("Fetch error (company may not exist yet):", e.message);
-        setCompany(null);
-        setPayments([]);
-      }
+      setCompany(null); setPayments([]); setVaultBalance(0);
     } finally {
       setLoading(false);
     }
-  }, [wallet.publicKey, getProgram]);
+  }, [mounted, wallet.publicKey, getProgram, connection]);
 
-  useEffect(() => {
-    if (mounted) refresh();
-  }, [mounted, refresh]);
+  useEffect(() => { if (mounted) refresh(); }, [mounted, refresh]);
+
+  // ─── TX wrapper with toasts ───────────────────────────────────
+
+  async function withToast<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    const id = toast.loading(`${label}...`);
+    try {
+      const result = await fn();
+      toast.success(`${label} successful`, { id, description: "Transaction confirmed on Solana" });
+      return result;
+    } catch (e: any) {
+      const msg = e.message?.slice(0, 100) || "Transaction failed";
+      toast.error(`${label} failed`, { id, description: msg });
+      throw e;
+    }
+  }
 
   // ─── Initialize Company ───────────────────────────────────────
 
@@ -199,28 +169,20 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     const program = getProgram();
     if (!program || !wallet.publicKey) throw new Error("Wallet not connected");
 
-    const compPDA = getCompanyPDA(wallet.publicKey);
-    const vaultPDA = getVaultPDA(compPDA);
-    const memberPDA = getMemberPDA(compPDA, wallet.publicKey);
+    return withToast("Create company", async () => {
+      const compPDA = getCompanyPDA(wallet.publicKey);
+      const vaultPDA = getVaultPDA(compPDA);
+      const memberPDA = getMemberPDA(compPDA, wallet.publicKey);
 
-    // Use a devnet USDC-like mint or create one
-    // For hackathon demo: we'll use a dummy mint we create
-    // In production: real USDC Token-2022 mint
-    const tx = await program.methods
-      .initializeCompany(name)
-      .accounts({
-        authority: wallet.publicKey,
-        company: compPDA,
-        vault: vaultPDA,
-        usdcMint: new PublicKey("Ac6Q53KEURMNhngkR1yvhrsxd6vhU1pNR31TMykjVFp"), // Our Token-2022 test USDC mint on devnet
-        founderMember: memberPDA,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-        systemProgram: new PublicKey("11111111111111111111111111111111"),
-      })
-      .rpc();
+      const tx = await program.methods.initializeCompany(name).accounts({
+        authority: wallet.publicKey, company: compPDA, vault: vaultPDA,
+        usdcMint: USDC_MINT, founderMember: memberPDA,
+        tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SYSTEM,
+      }).rpc();
 
-    await refresh();
-    return tx;
+      await refresh();
+      return tx;
+    });
   }, [getProgram, wallet.publicKey, refresh]);
 
   // ─── Add Member ───────────────────────────────────────────────
@@ -229,30 +191,25 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     const program = getProgram();
     if (!program || !wallet.publicKey) throw new Error("Wallet not connected");
 
-    const compPDA = getCompanyPDA(wallet.publicKey);
-    const authorityMemberPDA = getMemberPDA(compPDA, wallet.publicKey);
-    const newWallet = new PublicKey(walletAddr);
-    const newMemberPDA = getMemberPDA(compPDA, newWallet);
+    return withToast(`Add ${label}`, async () => {
+      const compPDA = getCompanyPDA(wallet.publicKey);
+      const newWallet = new PublicKey(walletAddr);
 
-    const roleObj = role === "owner" ? { owner: {} }
-      : role === "approver" ? { approver: {} }
-      : role === "viewer" ? { viewer: {} }
-      : { contractor: {} };
+      const tx = await program.methods
+        .addMember(
+          role === "owner" ? { owner: {} } : role === "approver" ? { approver: {} }
+            : role === "viewer" ? { viewer: {} } : { contractor: {} },
+          label
+        ).accounts({
+          authority: wallet.publicKey, company: compPDA,
+          authorityMember: getMemberPDA(compPDA, wallet.publicKey),
+          newMemberWallet: newWallet, member: getMemberPDA(compPDA, newWallet),
+          systemProgram: SYSTEM,
+        }).rpc();
 
-    const tx = await program.methods
-      .addMember(roleObj, label)
-      .accounts({
-        authority: wallet.publicKey,
-        company: compPDA,
-        authorityMember: authorityMemberPDA,
-        newMemberWallet: newWallet,
-        member: newMemberPDA,
-        systemProgram: new PublicKey("11111111111111111111111111111111"),
-      })
-      .rpc();
-
-    await refresh();
-    return tx;
+      await refresh();
+      return tx;
+    });
   }, [getProgram, wallet.publicKey, refresh]);
 
   // ─── Set Policies ─────────────────────────────────────────────
@@ -261,78 +218,56 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     const program = getProgram();
     if (!program || !wallet.publicKey) throw new Error("Wallet not connected");
 
-    const compPDA = getCompanyPDA(wallet.publicKey);
-    const memberPDA = getMemberPDA(compPDA, wallet.publicKey);
+    return withToast("Save policies", async () => {
+      const compPDA = getCompanyPDA(wallet.publicKey);
 
-    const tx = await program.methods
-      .setPolicies({
+      const tx = await program.methods.setPolicies({
         autoApproveLimit: new BN(policy.autoApproveLimit * 1_000_000),
         dualApproveThreshold: new BN(policy.dualApproveThreshold * 1_000_000),
         monthlyBurnCap: new BN(policy.monthlyBurnCap * 1_000_000),
         requireVendorVerification: policy.requireVendorVerification,
         restrictToKnownRecipients: policy.restrictToKnownRecipients,
         minRunwayMonths: policy.minRunwayMonths,
-      })
-      .accounts({
-        authority: wallet.publicKey,
-        company: compPDA,
-        authorityMember: memberPDA,
-      })
-      .rpc();
+      }).accounts({
+        authority: wallet.publicKey, company: compPDA,
+        authorityMember: getMemberPDA(compPDA, wallet.publicKey),
+      }).rpc();
 
-    await refresh();
-    return tx;
+      await refresh();
+      return tx;
+    });
   }, [getProgram, wallet.publicKey, refresh]);
 
   // ─── Create Payment ───────────────────────────────────────────
 
-  const createPayment = useCallback(async (
-    recipient: string,
-    amount: number,
-    category: string,
-    memo: string
-  ) => {
+  const createPayment = useCallback(async (recipient: string, amount: number, category: string, memo: string) => {
     const program = getProgram();
     if (!program || !wallet.publicKey || !company) throw new Error("Not ready");
 
-    const compPDA = getCompanyPDA(wallet.publicKey);
-    const requesterMemberPDA = getMemberPDA(compPDA, wallet.publicKey);
-    const recipientKey = new PublicKey(recipient);
-    const nonce = company.paymentNonce.toNumber();
-    const paymentPDA = getPaymentPDA(compPDA, nonce);
+    return withToast(`Payment $${amount.toLocaleString()}`, async () => {
+      const compPDA = getCompanyPDA(wallet.publicKey);
+      const nonce = company.paymentNonce.toNumber();
+      const paymentPDA = getPaymentPDA(compPDA, nonce);
+      const categoryObj = { payroll: {}, vendor: {}, subscription: {}, contractor: {}, other: {} };
 
-    const categoryObj = category === "payroll" ? { payroll: {} }
-      : category === "vendor" ? { vendor: {} }
-      : category === "subscription" ? { subscription: {} }
-      : category === "contractor" ? { contractor: {} }
-      : { other: {} };
+      const encoder = new TextEncoder();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(memo));
+      const descriptionHash = Array.from(new Uint8Array(hashBuffer));
 
-    // Hash memo as description
-    const encoder = new TextEncoder();
-    const data = encoder.encode(memo);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const descriptionHash = Array.from(new Uint8Array(hashBuffer));
-
-    const tx = await program.methods
-      .createPayment(
+      const tx = await program.methods.createPayment(
         new BN(amount * 1_000_000),
-        categoryObj,
-        descriptionHash,
-        memo.slice(0, 128),
-        0 // risk score
-      )
-      .accounts({
-        requester: wallet.publicKey,
-        company: compPDA,
-        requesterMember: requesterMemberPDA,
-        recipient: recipientKey,
-        payment: paymentPDA,
-        systemProgram: new PublicKey("11111111111111111111111111111111"),
-      })
-      .rpc();
+        { [category]: {} } || { other: {} },
+        descriptionHash, memo.slice(0, 128), 0
+      ).accounts({
+        requester: wallet.publicKey, company: compPDA,
+        requesterMember: getMemberPDA(compPDA, wallet.publicKey),
+        recipient: new PublicKey(recipient), payment: paymentPDA,
+        systemProgram: SYSTEM,
+      }).rpc();
 
-    await refresh();
-    return tx;
+      await refresh();
+      return tx;
+    });
   }, [getProgram, wallet.publicKey, company, refresh]);
 
   // ─── Approve Payment ──────────────────────────────────────────
@@ -341,22 +276,16 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     const program = getProgram();
     if (!program || !wallet.publicKey || !company) throw new Error("Not ready");
 
-    const compPDA = getCompanyPDA(company.authority);
-    const approverMemberPDA = getMemberPDA(compPDA, wallet.publicKey);
-    const paymentPDA = getPaymentPDA(compPDA, paymentId);
-
-    const tx = await program.methods
-      .approvePayment()
-      .accounts({
-        approver: wallet.publicKey,
-        company: compPDA,
-        approverMember: approverMemberPDA,
-        payment: paymentPDA,
-      })
-      .rpc();
-
-    await refresh();
-    return tx;
+    return withToast("Approve payment", async () => {
+      const compPDA = getCompanyPDA(company.authority);
+      const tx = await program.methods.approvePayment().accounts({
+        approver: wallet.publicKey, company: compPDA,
+        approverMember: getMemberPDA(compPDA, wallet.publicKey),
+        payment: getPaymentPDA(compPDA, paymentId),
+      }).rpc();
+      await refresh();
+      return tx;
+    });
   }, [getProgram, wallet.publicKey, company, refresh]);
 
   // ─── Reject Payment ───────────────────────────────────────────
@@ -365,41 +294,62 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     const program = getProgram();
     if (!program || !wallet.publicKey || !company) throw new Error("Not ready");
 
-    const compPDA = getCompanyPDA(company.authority);
-    const rejectorMemberPDA = getMemberPDA(compPDA, wallet.publicKey);
-    const paymentPDA = getPaymentPDA(compPDA, paymentId);
-
-    const tx = await program.methods
-      .rejectPayment()
-      .accounts({
-        rejector: wallet.publicKey,
-        company: compPDA,
-        rejectorMember: rejectorMemberPDA,
-        payment: paymentPDA,
-      })
-      .rpc();
-
-    await refresh();
-    return tx;
+    return withToast("Reject payment", async () => {
+      const compPDA = getCompanyPDA(company.authority);
+      const tx = await program.methods.rejectPayment().accounts({
+        rejector: wallet.publicKey, company: compPDA,
+        rejectorMember: getMemberPDA(compPDA, wallet.publicKey),
+        payment: getPaymentPDA(compPDA, paymentId),
+      }).rpc();
+      await refresh();
+      return tx;
+    });
   }, [getProgram, wallet.publicKey, company, refresh]);
 
+  // ─── Deposit USDC to Vault ────────────────────────────────────
+
+  const depositToVault = useCallback(async (amount: number) => {
+    if (!wallet.publicKey || !wallet.signTransaction) throw new Error("Wallet not connected");
+    if (!companyPDA) throw new Error("No company");
+
+    return withToast(`Deposit $${amount.toLocaleString()} USDC`, async () => {
+      const vaultPDA = getVaultPDA(companyPDA);
+      const userATA = getAssociatedTokenAddressSync(
+        USDC_MINT, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      const tx = new Transaction();
+
+      // Transfer USDC from user ATA to vault
+      tx.add(createTransferCheckedInstruction(
+        userATA,          // from
+        USDC_MINT,        // mint
+        vaultPDA,         // to (vault)
+        wallet.publicKey, // authority
+        BigInt(amount * 1_000_000), // amount in lamports
+        6,                // decimals
+        [],               // signers
+        TOKEN_2022_PROGRAM_ID
+      ));
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const signed = await wallet.signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction(sig, "confirmed");
+
+      await refresh();
+      return sig;
+    });
+  }, [wallet, companyPDA, connection, refresh]);
+
   return (
-    <CompanyContext.Provider
-      value={{
-        loading,
-        company,
-        companyPDA,
-        payments,
-        error,
-        initializeCompany,
-        addMember,
-        setPolicies,
-        createPayment,
-        approvePayment,
-        rejectPayment,
-        refresh,
-      }}
-    >
+    <CompanyContext.Provider value={{
+      loading, company, companyPDA, vaultBalance, payments, error,
+      initializeCompany, addMember, setPolicies, createPayment,
+      approvePayment, rejectPayment, depositToVault, refresh,
+    }}>
       {children}
     </CompanyContext.Provider>
   );
