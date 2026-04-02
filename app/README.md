@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Black Budget — Frontend
 
-## Getting Started
+Next.js 16 application powering the Black Budget dashboard.
 
-First, run the development server:
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.local.example .env.local   # Add your ANTHROPIC_API_KEY
+pnpm dev                            # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Pages
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Route | Purpose |
+|-------|---------|
+| `/` | Dashboard — treasury balance, spend, runway, recent activity |
+| `/invoices` | Upload invoice (PDF/PNG) — AI extracts data, policy evaluates |
+| `/approvals` | Pending payments — approve or reject with one click |
+| `/payments` | Payment history with status and on-chain TX links |
+| `/team` | Member management — Owner, Approver, Viewer, Contractor roles |
+| `/policies` | Treasury rules — auto-approve limit, dual threshold, burn cap |
+| `/proofs` | Selective disclosure — Investor, Auditor, Regulator views |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Key Files
 
-## Learn More
+```
+src/
+  app/
+    api/parse-invoice/    # Claude Vision API route (server-side)
+    page.tsx              # Dashboard (reads on-chain state)
+    invoices/page.tsx     # AI invoice parsing + policy evaluation
+    proofs/page.tsx       # Selective disclosure proof export
+  components/
+    onboarding.tsx        # Connect wallet + create company flow
+    sidebar.tsx           # Navigation with live pending count
+    app-shell.tsx         # Routes between onboarding and main app
+  lib/
+    company-context.tsx   # On-chain state manager (all Anchor calls)
+    idl.ts                # Anchor IDL with discriminators
+    program.ts            # useBlackBudget hook (PDA helpers)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Tests
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm test              # 41 unit + integration tests
+node full-flow-test.mjs # 5-step on-chain flow (requires devnet)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Environment Variables
 
-## Deploy on Vercel
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | For real AI parsing | Claude API key for invoice extraction |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Without the key, invoice parsing falls back to mock data.
