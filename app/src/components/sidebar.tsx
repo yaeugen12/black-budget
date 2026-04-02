@@ -12,7 +12,12 @@ import {
   Wallet,
   ArrowUpDown,
 } from "lucide-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import dynamic from "next/dynamic";
+
+const WalletMultiButton = dynamic(
+  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
+  { ssr: false }
+);
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },

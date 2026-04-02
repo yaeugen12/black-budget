@@ -7,7 +7,7 @@ export const IDL = {
   instructions: [
     {
       name: "initialize_company",
-      discriminator: [],
+      discriminator: [75,156,55,94,184,64,58,30],
       accounts: [
         { name: "authority", writable: true, signer: true },
         { name: "company", writable: true, pda: { seeds: [{ kind: "const", value: [99,111,109,112,97,110,121] }, { kind: "account", path: "authority" }] } },
@@ -21,7 +21,7 @@ export const IDL = {
     },
     {
       name: "add_member",
-      discriminator: [],
+      discriminator: [13,116,123,130,126,198,57,34],
       accounts: [
         { name: "authority", writable: true, signer: true },
         { name: "company", writable: true },
@@ -37,7 +37,7 @@ export const IDL = {
     },
     {
       name: "set_policies",
-      discriminator: [],
+      discriminator: [87,55,15,198,84,223,113,39],
       accounts: [
         { name: "authority", signer: true },
         { name: "company", writable: true },
@@ -47,7 +47,7 @@ export const IDL = {
     },
     {
       name: "create_payment",
-      discriminator: [],
+      discriminator: [28,81,85,253,7,223,154,42],
       accounts: [
         { name: "requester", writable: true, signer: true },
         { name: "company", writable: true },
@@ -66,7 +66,7 @@ export const IDL = {
     },
     {
       name: "approve_payment",
-      discriminator: [],
+      discriminator: [21,123,195,139,107,141,34,187],
       accounts: [
         { name: "approver", signer: true },
         { name: "company" },
@@ -77,7 +77,7 @@ export const IDL = {
     },
     {
       name: "reject_payment",
-      discriminator: [],
+      discriminator: [199,215,82,136,197,236,68,26],
       accounts: [
         { name: "rejector", signer: true },
         { name: "company" },
@@ -88,7 +88,7 @@ export const IDL = {
     },
     {
       name: "execute_payment",
-      discriminator: [],
+      discriminator: [86,4,7,7,120,139,232,139],
       accounts: [
         { name: "executor", writable: true, signer: true },
         { name: "company", writable: true },
@@ -103,10 +103,10 @@ export const IDL = {
     },
   ],
   accounts: [
-    { name: "Company", discriminator: [] },
-    { name: "Member", discriminator: [] },
-    { name: "PaymentRequest", discriminator: [] },
-    { name: "ProofRecord", discriminator: [] },
+    { name: "Company", discriminator: [32,212,52,137,90,7,206,183] },
+    { name: "Member", discriminator: [54,19,162,21,29,166,17,198] },
+    { name: "PaymentRequest", discriminator: [27,20,202,96,101,242,124,69] },
+    { name: "ProofRecord", discriminator: [237,59,155,172,204,117,87,44] },
   ],
   types: [
     {
