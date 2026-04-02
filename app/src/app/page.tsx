@@ -2,17 +2,13 @@
 
 import {
   ArrowUpRight,
-  ArrowDownRight,
   Eye,
   EyeOff,
   Users,
   FileText,
-  Clock,
   Shield,
-  CheckCircle2,
   AlertTriangle,
   ExternalLink,
-  TrendingDown,
   Plus,
 } from "lucide-react";
 import Link from "next/link";

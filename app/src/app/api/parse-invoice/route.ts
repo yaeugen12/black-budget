@@ -45,11 +45,11 @@ export async function POST(request: NextRequest) {
             ],
           }],
         });
-        console.log(`Invoice parsed with model: ${model}`);
+        // Successfully parsed with this model
         break;
       } catch (e: any) {
         if (e.status === 404 || e.message?.includes("not_found")) {
-          console.log(`Model ${model} not available, trying next...`);
+          // Model not available, try next
           continue;
         }
         throw e;

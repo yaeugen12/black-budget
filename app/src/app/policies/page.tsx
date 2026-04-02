@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Shield, Save, Zap, Users, AlertTriangle, Lock, CheckCircle2, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Shield, Save, Zap, AlertTriangle, Lock, CheckCircle2, Loader2 } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 
 interface PolicyConfig {

@@ -58,4 +58,16 @@ pub mod black_budget {
     pub fn execute_payment(ctx: Context<ExecutePayment>) -> Result<()> {
         payments::handle_execute_payment(ctx)
     }
+
+    /// Anchor a selective disclosure proof on-chain
+    pub fn record_proof(
+        ctx: Context<RecordProof>,
+        proof_type: ProofType,
+        merkle_root: [u8; 32],
+        payment_count: u32,
+        period_start: i64,
+        period_end: i64,
+    ) -> Result<()> {
+        record_proof::handle_record_proof(ctx, proof_type, merkle_root, payment_count, period_start, period_end)
+    }
 }

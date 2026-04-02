@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  Shield, Zap, Eye, Lock, ArrowRight, CheckCircle2,
+  Shield, Zap, Eye, Lock, ArrowRight,
   FileText, Users, BarChart3, Code2, ExternalLink,
-  Sparkles, ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 

@@ -3,21 +3,25 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/lib/company-context";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { computeMerkleRoot, pseudonymize, abbreviateHash, type MerkleLeaf } from "@/lib/merkle";
 import {
   Eye, EyeOff, Shield, Download, Copy, CheckCircle2,
-  Lock, Unlock, BarChart3, FileText, Hash, Loader2, AlertTriangle,
+  Lock, Unlock, BarChart3, FileText, Hash, Loader2, AlertTriangle, Anchor,
 } from "lucide-react";
 
 type ProofView = "investor" | "auditor" | "regulator" | null;
 
 export default function ProofsPage() {
-  const { company, companyPDA, vaultBalance, payments } = useCompany();
+  const { company, companyPDA, vaultBalance, payments, anchorProof } = useCompany();
+  const wallet = useWallet();
   const [activeView, setActiveView] = useState<ProofView>(null);
   const [copied, setCopied] = useState(false);
   const [merkleRoot, setMerkleRoot] = useState<string>("");
   const [leafCount, setLeafCount] = useState(0);
   const [computing, setComputing] = useState(false);
+  const [anchoring, setAnchoring] = useState(false);
+  const [anchoredTx, setAnchoredTx] = useState<string | null>(null);
   const [auditorRows, setAuditorRows] = useState<{ id: string; vendor: string; amount: number; category: string; date: string }[]>([]);
 
   // Derive real data from on-chain payments
@@ -85,6 +89,29 @@ export default function ProofsPage() {
     toast.success("Merkle root copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleAnchor = async () => {
+    if (!activeView || !merkleRoot) return;
+    setAnchoring(true);
+    try {
+      // Convert hex merkle root to byte array
+      const rootBytes = Array.from(
+        { length: 32 },
+        (_, i) => parseInt(merkleRoot.slice(i * 2, i * 2 + 2), 16) || 0
+      );
+      const tx = await anchorProof(activeView, rootBytes, payments.length);
+      setAnchoredTx(tx);
+    } catch (e) {
+      console.error("Anchor failed:", e);
+    } finally {
+      setAnchoring(false);
+    }
+  };
+
+  // Reset anchored state when view changes
+  useEffect(() => {
+    setAnchoredTx(null);
+  }, [activeView]);
 
   const handleExport = (format: "json" | "csv") => {
     const now = new Date().toISOString();
@@ -280,6 +307,23 @@ export default function ProofsPage() {
               </button>
             </div>
           </div>
+
+          {/* Anchor on-chain */}
+          {wallet.connected && (
+            <button
+              onClick={handleAnchor}
+              disabled={anchoring || !merkleRoot}
+              className={`w-full text-[13px] py-2.5 ${anchoredTx ? "btn-ghost text-success" : "btn-primary"}`}
+            >
+              {anchoring ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Anchoring on-chain...</>
+              ) : anchoredTx ? (
+                <><CheckCircle2 className="w-4 h-4" /> Anchored — {anchoredTx.slice(0, 12)}...</>
+              ) : (
+                <><Anchor className="w-4 h-4" /> Anchor Proof On-Chain</>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -345,6 +389,23 @@ export default function ProofsPage() {
               </button>
             </div>
           </div>
+
+          {/* Anchor on-chain */}
+          {wallet.connected && (
+            <button
+              onClick={handleAnchor}
+              disabled={anchoring || !merkleRoot}
+              className={`w-full text-[13px] py-2.5 ${anchoredTx ? "btn-ghost text-success" : "btn-primary"}`}
+            >
+              {anchoring ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Anchoring on-chain...</>
+              ) : anchoredTx ? (
+                <><CheckCircle2 className="w-4 h-4" /> Anchored — {anchoredTx.slice(0, 12)}...</>
+              ) : (
+                <><Anchor className="w-4 h-4" /> Anchor Proof On-Chain</>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -403,6 +464,23 @@ export default function ProofsPage() {
           <button onClick={() => handleExport("json")} className="btn-primary w-full text-[13px]">
             <Download className="w-4 h-4" /> Export Full Disclosure JSON
           </button>
+
+          {/* Anchor on-chain */}
+          {wallet.connected && (
+            <button
+              onClick={handleAnchor}
+              disabled={anchoring || !merkleRoot}
+              className={`w-full text-[13px] py-2.5 ${anchoredTx ? "btn-ghost text-success" : "btn-primary"}`}
+            >
+              {anchoring ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Anchoring on-chain...</>
+              ) : anchoredTx ? (
+                <><CheckCircle2 className="w-4 h-4" /> Anchored — {anchoredTx.slice(0, 12)}...</>
+              ) : (
+                <><Anchor className="w-4 h-4" /> Anchor Proof On-Chain</>
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>

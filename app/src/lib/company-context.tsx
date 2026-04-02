@@ -3,7 +3,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -69,6 +69,7 @@ interface CompanyContextType {
   approvePayment: (paymentId: number) => Promise<string>;
   rejectPayment: (paymentId: number) => Promise<string>;
   depositToVault: (amount: number) => Promise<string>;
+  anchorProof: (proofType: string, merkleRoot: number[], paymentCount: number) => Promise<string>;
   refresh: () => Promise<void>;
 }
 
@@ -249,8 +250,6 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const compPDA = getCompanyPDA(wallet.publicKey);
       const nonce = company.paymentNonce.toNumber();
       const paymentPDA = getPaymentPDA(compPDA, nonce);
-      const categoryObj = { payroll: {}, vendor: {}, subscription: {}, contractor: {}, other: {} };
-
       const encoder = new TextEncoder();
       const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(memo));
       const descriptionHash = Array.from(new Uint8Array(hashBuffer));
@@ -345,11 +344,61 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     });
   }, [wallet, companyPDA, connection, refresh]);
 
+  // ─── Anchor Proof On-Chain ────────────────────────────────────
+
+  const anchorProof = useCallback(async (proofType: string, merkleRoot: number[], paymentCount: number) => {
+    const program = getProgram();
+    if (!program || !wallet.publicKey || !companyPDA) throw new Error("Not ready");
+
+    return withToast("Anchor proof on-chain", async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const periodStart = now - 86400 * 30;
+      const periodEnd = now;
+
+      const proofTypeObj = proofType === "investor" ? { investor: {} }
+        : proofType === "auditor" ? { auditor: {} }
+        : { regulator: {} };
+
+      // PDA seeded with period_end (deterministic — both client and program use the same arg)
+      const tsBytes = Buffer.alloc(8);
+      let ts = BigInt(periodEnd);
+      for (let i = 0; i < 8; i++) { tsBytes[i] = Number(ts & 0xffn); ts >>= 8n; }
+      const [proofPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("proof"), companyPDA.toBuffer(), tsBytes],
+        programId
+      );
+
+      // Pad merkle root to 32 bytes
+      const root = merkleRoot.length >= 32 ? merkleRoot.slice(0, 32) : [...merkleRoot, ...new Array(32 - merkleRoot.length).fill(0)];
+
+      const tx = await program.methods
+        .recordProof(
+          proofTypeObj,
+          root,
+          paymentCount,
+          new BN(periodStart),
+          new BN(periodEnd),
+        )
+        .accounts({
+          authority: wallet.publicKey,
+          company: companyPDA,
+          member: getMemberPDA(companyPDA, wallet.publicKey),
+          proofRecord: proofPDA,
+          clock: new PublicKey("SysvarC1ock11111111111111111111111111111111"),
+          systemProgram: SYSTEM,
+        })
+        .rpc();
+
+      await refresh();
+      return tx;
+    });
+  }, [getProgram, wallet.publicKey, companyPDA, connection, refresh]);
+
   return (
     <CompanyContext.Provider value={{
       loading, company, companyPDA, vaultBalance, payments, error,
       initializeCompany, addMember, setPolicies, createPayment,
-      approvePayment, rejectPayment, depositToVault, refresh,
+      approvePayment, rejectPayment, depositToVault, anchorProof, refresh,
     }}>
       {children}
     </CompanyContext.Provider>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, XCircle, Clock, AlertTriangle, User, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, User, ChevronDown, ChevronUp } from "lucide-react";
 
 interface PendingPayment {
   id: string;

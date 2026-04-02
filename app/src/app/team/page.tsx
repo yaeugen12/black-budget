@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Plus, Shield, Eye, Pencil, Trash2, Copy, CheckCircle2 } from "lucide-react";
+import { Users, Plus, Shield, Eye, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 
 interface TeamMember {
   wallet: string;

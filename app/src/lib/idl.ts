@@ -101,6 +101,25 @@ export const IDL = {
       ],
       args: [],
     },
+    {
+      name: "record_proof",
+      discriminator: [144,172,144,35,124,170,93,80],
+      accounts: [
+        { name: "authority", writable: true, signer: true },
+        { name: "company" },
+        { name: "member" },
+        { name: "proof_record", writable: true },
+        { name: "clock" },
+        { name: "system_program", address: "11111111111111111111111111111111" },
+      ],
+      args: [
+        { name: "proof_type", type: { defined: { name: "ProofType" } } },
+        { name: "merkle_root", type: { array: ["u8", 32] } },
+        { name: "payment_count", type: "u32" },
+        { name: "period_start", type: "i64" },
+        { name: "period_end", type: "i64" },
+      ],
+    },
   ],
   accounts: [
     { name: "Company", discriminator: [32,212,52,137,90,7,206,183] },

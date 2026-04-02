@@ -1,5 +1,5 @@
 // @ts-nocheck — Types will be auto-generated when anchor IDL build works with stable Rust
-import { Program, AnchorProvider, BN, web3 } from "@coral-xyz/anchor";
+import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";

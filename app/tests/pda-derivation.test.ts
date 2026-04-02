@@ -38,6 +38,16 @@ function getPaymentPDA(company: PublicKey, nonce: number): PublicKey {
   return pda;
 }
 
+function getProofPDA(company: PublicKey, periodEnd: number): PublicKey {
+  const buf = Buffer.alloc(8);
+  buf.writeBigInt64LE(BigInt(periodEnd));
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("proof"), company.toBuffer(), buf],
+    PROGRAM_ID
+  );
+  return pda;
+}
+
 describe("PDA Derivation", () => {
   const testAuthority = new PublicKey("HGVzMKLxYYKFoy8XpGbCJjFYa739KndS8FYrnLnR9Es");
 
@@ -121,6 +131,36 @@ describe("PDA Derivation", () => {
       const company = getCompanyPDA(testAuthority);
       const pda = getPaymentPDA(company, 999999);
       expect(pda.toBase58()).toBeTruthy();
+    });
+  });
+
+  describe("Proof PDA", () => {
+    it("derives deterministically for same company + period_end", () => {
+      const company = getCompanyPDA(testAuthority);
+      const pda1 = getProofPDA(company, 1700000000);
+      const pda2 = getProofPDA(company, 1700000000);
+      expect(pda1.toBase58()).toBe(pda2.toBase58());
+    });
+
+    it("different period_end values produce different PDAs", () => {
+      const company = getCompanyPDA(testAuthority);
+      const pda1 = getProofPDA(company, 1700000000);
+      const pda2 = getProofPDA(company, 1700000001);
+      expect(pda1.toBase58()).not.toBe(pda2.toBase58());
+    });
+
+    it("different companies with same period_end produce different PDAs", () => {
+      const company1 = getCompanyPDA(testAuthority);
+      const company2 = getCompanyPDA(PublicKey.unique());
+      const pda1 = getProofPDA(company1, 1700000000);
+      const pda2 = getProofPDA(company2, 1700000000);
+      expect(pda1.toBase58()).not.toBe(pda2.toBase58());
+    });
+
+    it("is a valid PDA (off curve)", () => {
+      const company = getCompanyPDA(testAuthority);
+      const pda = getProofPDA(company, 1700000000);
+      expect(PublicKey.isOnCurve(pda)).toBe(false);
     });
   });
 });
