@@ -14,7 +14,7 @@ black_budget = "3xgDaaFKmfGHBxhLfN16Eryyaact9fZ6tm6xypERpg9k"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

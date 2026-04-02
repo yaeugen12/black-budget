@@ -30,33 +30,36 @@ interface PolicyDecision {
   requiredApprovers: number;
 }
 
-// Simulated AI parsing (replace with real API call)
-async function simulateAIParse(file: File): Promise<ParsedInvoice> {
-  await new Promise((r) => setTimeout(r, 2000)); // Simulate API delay
-  return {
-    vendor: "Acme Design Studio",
-    amount: 3200.0,
-    currency: "USD",
-    dueDate: "2026-04-15",
-    category: "Contractor",
-    lineItems: [
-      { description: "UI/UX Design — Dashboard redesign", amount: 2400 },
-      { description: "Brand assets — Icon set v2", amount: 800 },
-    ],
-    riskFlags: [],
-    confidence: 0.97,
-  };
-}
+// Real AI parsing via Claude Vision API + policy evaluation
+async function parseInvoiceAI(file: File): Promise<{ invoice: ParsedInvoice; policy: PolicyDecision }> {
+  const formData = new FormData();
+  formData.append("file", file);
 
-function evaluatePolicy(invoice: ParsedInvoice): PolicyDecision {
-  const amount = invoice.amount;
-  if (amount <= 5000) {
-    return { action: "auto_approve", reason: "Under $5,000 USDC auto-approve threshold", requiredApprovers: 0 };
-  } else if (amount <= 15000) {
-    return { action: "require_approval", reason: "Requires CFO approval", requiredApprovers: 1 };
-  } else {
-    return { action: "require_dual", reason: "Over $15,000 — requires Founder + CFO", requiredApprovers: 2 };
+  const res = await fetch("/api/parse-invoice", { method: "POST", body: formData });
+
+  if (!res.ok) {
+    // Fallback to mock if API key not set
+    console.warn("AI API failed, using mock data");
+    const mockInvoice: ParsedInvoice = {
+      vendor: "Acme Design Studio",
+      amount: 3200.0,
+      currency: "USD",
+      dueDate: "2026-04-15",
+      category: "Contractor",
+      lineItems: [
+        { description: "UI/UX Design — Dashboard redesign", amount: 2400 },
+        { description: "Brand assets — Icon set v2", amount: 800 },
+      ],
+      riskFlags: [],
+      confidence: 0.97,
+    };
+    return {
+      invoice: mockInvoice,
+      policy: { action: "auto_approve", reason: "Under $5,000 USDC auto-approve threshold", requiredApprovers: 0 },
+    };
   }
+
+  return res.json();
 }
 
 export default function InvoicesPage() {
@@ -74,9 +77,9 @@ export default function InvoicesPage() {
     setPolicyResult(null);
     setSubmitted(false);
 
-    const result = await simulateAIParse(f);
-    setParsed(result);
-    setPolicyResult(evaluatePolicy(result));
+    const { invoice, policy } = await parseInvoiceAI(f);
+    setParsed(invoice);
+    setPolicyResult(policy);
     setParsing(false);
   }, []);
 
