@@ -6,9 +6,17 @@ import { Sidebar } from "./sidebar";
 import { Onboarding } from "./onboarding";
 import { Loader2 } from "lucide-react";
 
+import { usePathname } from "next/navigation";
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const wallet = useWallet();
   const { company, loading } = useCompany();
+  const pathname = usePathname();
+
+  // Landing page — no shell, full screen
+  if (pathname === "/landing") {
+    return <main className="flex-1 overflow-y-auto">{children}</main>;
+  }
 
   // Not connected or no company → show onboarding (full screen, no sidebar)
   if (!wallet.connected || (!loading && !company)) {
