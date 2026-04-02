@@ -4,14 +4,17 @@ import {
   Eye,
   EyeOff,
   FileText,
-  Shield,
   AlertTriangle,
   ExternalLink,
   Plus,
   Wallet,
-  Activity,
   ChevronRight,
-  Sparkles,
+  CheckCircle2,
+  Circle,
+  ArrowRight,
+  Shield,
+  Upload,
+  Stamp,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -25,7 +28,6 @@ export default function Dashboard() {
   const [depositAmount, setDepositAmount] = useState("");
   const [depositing, setDepositing] = useState(false);
 
-  const totalSpent = company ? company.totalSpent.toNumber() / 1_000_000 : 0;
   const monthlySpent = company ? company.monthlySpent.toNumber() / 1_000_000 : 0;
   const autoApproveLimit = company ? company.policy.autoApproveLimit.toNumber() / 1_000_000 : 5000;
   const memberCount = company ? company.memberCount : 1;
@@ -60,124 +62,79 @@ export default function Dashboard() {
 
   return (
     <div className="page-shell mx-auto max-w-6xl space-y-6 animate-in">
-      <section className="hero-surface overflow-hidden px-6 py-7 lg:px-8 lg:py-8">
-        <div className="relative z-10 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+      <section className="card overflow-hidden px-6 py-6 lg:px-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="eyebrow">
-              <Activity className="h-3.5 w-3.5" />
-              Treasury control center
-            </div>
-
-            <div className="mt-5 flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight lg:text-4xl">
-                  {company?.name || "Dashboard"}
-                </h1>
-                {companyPDA && (
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <a
-                      href={`https://explorer.solana.com/address/${companyPDA.toBase58()}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/55 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-primary"
-                    >
-                      <span className="text-mono">
-                        {companyPDA.toBase58().slice(0, 12)}...{companyPDA.toBase58().slice(-4)}
-                      </span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                    <ConfidentialBadge />
-                  </div>
-                )}
+            <p className="eyebrow">Treasury</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl">
+              {company?.name || "Dashboard"}
+            </h1>
+            <p className="mt-3 max-w-2xl text-[14px] leading-6 text-muted-foreground">
+              See the balance, the items waiting on approvals, and the most recent treasury activity.
+            </p>
+            {companyPDA && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <a
+                  href={`https://explorer.solana.com/address/${companyPDA.toBase58()}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/55 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-primary"
+                >
+                  <span className="text-mono">
+                    {companyPDA.toBase58().slice(0, 12)}...{companyPDA.toBase58().slice(-4)}
+                  </span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                <ConfidentialBadge />
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => setBalanceVisible(!balanceVisible)} className="btn-ghost">
-                  {balanceVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  {balanceVisible ? "Hide values" : "Show values"}
-                </button>
-                <button onClick={() => setShowDeposit(!showDeposit)} className="btn-secondary text-[13px] py-2 px-4">
-                  <Wallet className="h-4 w-4" /> Deposit
-                </button>
-                <Link href="/invoices" className="btn-primary text-[13px] py-2 px-4">
-                  <Plus className="h-4 w-4" /> New Invoice
-                </Link>
-              </div>
-            </div>
-
-            <div className="mt-7 grid gap-3 sm:grid-cols-3">
-              <div className="metric-tile">
-                <p className="text-label mb-2">Treasury Balance</p>
-                <div className="stat-value">{fmt(vaultBalance)}</div>
-                <p className="mt-2 text-[12px] text-muted-foreground">Live Token-2022 vault balance via RPC</p>
-              </div>
-              <div className="metric-tile">
-                <p className="text-label mb-2">Total Spent</p>
-                <div className="stat-value">{fmt(totalSpent)}</div>
-                <p className="mt-2 text-[12px] text-muted-foreground">
-                  Across {paymentCount} payment{paymentCount !== 1 ? "s" : ""}
-                </p>
-              </div>
-              <div className="metric-tile">
-                <p className="text-label mb-2">Runway Signal</p>
-                <div className="stat-value">
-                  {monthlySpent === 0 ? "N/A" : `${runway.toFixed(1)} mo`}
-                </div>
-                <p className="mt-2 text-[12px] text-muted-foreground">{runwayLabel}</p>
-              </div>
-            </div>
+            )}
           </div>
 
-          <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-label mb-1">Operating Snapshot</p>
-                <h2 className="section-title">What needs attention right now</h2>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
-                <Shield className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <div className="flex items-center justify-between rounded-2xl border border-border bg-secondary/50 px-4 py-3">
-                <div>
-                  <p className="text-[13px] font-medium">Pending approvals</p>
-                  <p className="text-[12px] text-muted-foreground">Payments waiting for signer action</p>
-                </div>
-                <span className="badge badge-warning">{pendingPayments.length}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border bg-secondary/50 px-4 py-3">
-                <div>
-                  <p className="text-[13px] font-medium">Team members</p>
-                  <p className="text-[12px] text-muted-foreground">Wallet roles active in the company</p>
-                </div>
-                <span className="badge badge-neutral">{memberCount}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border bg-secondary/50 px-4 py-3">
-                <div>
-                  <p className="text-[13px] font-medium">Auto-approve band</p>
-                  <p className="text-[12px] text-muted-foreground">Low-friction operational spend</p>
-                </div>
-                <span className="badge badge-info">&lt; {fmt(autoApproveLimit)}</span>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-border bg-[rgba(255,255,255,0.02)] p-4">
-              <div className="mb-2 flex items-center justify-between text-[12px]">
-                <span className="text-muted-foreground">Runway health</span>
-                <span className="font-medium text-foreground">{runwayLabel}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    runway < 6 ? "bg-destructive" : runway < 12 ? "bg-warning" : "bg-success"
-                  }`}
-                  style={{ width: `${Math.min((runway / 24) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setBalanceVisible(!balanceVisible)} className="btn-ghost">
+              {balanceVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              {balanceVisible ? "Hide values" : "Show values"}
+            </button>
+            <button onClick={() => setShowDeposit(!showDeposit)} className="btn-secondary text-[13px] py-2 px-4">
+              <Wallet className="h-4 w-4" /> Deposit
+            </button>
+            <Link href="/invoices" className="btn-primary text-[13px] py-2 px-4">
+              <Plus className="h-4 w-4" /> New Invoice
+            </Link>
           </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <div className="metric-tile">
+            <p className="text-label mb-2">Treasury Balance</p>
+            <div className="stat-value">{fmt(vaultBalance)}</div>
+            <p className="mt-2 text-[12px] text-muted-foreground">Live vault balance</p>
+          </div>
+          <div className="metric-tile">
+            <p className="text-label mb-2">Pending Approvals</p>
+            <div className="stat-value">{pendingPayments.length}</div>
+            <p className="mt-2 text-[12px] text-muted-foreground">
+              {pendingPayments.length > 0 ? "Needs signer attention" : "Nothing waiting right now"}
+            </p>
+          </div>
+          <div className="metric-tile">
+            <p className="text-label mb-2">Runway</p>
+            <div className="stat-value">
+              {monthlySpent === 0 ? "N/A" : `${runway.toFixed(1)} mo`}
+            </div>
+            <p className="mt-2 text-[12px] text-muted-foreground">{runwayLabel}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="badge badge-neutral">{memberCount} team member{memberCount !== 1 ? "s" : ""}</span>
+          <span className="badge badge-info">Auto-approve under {fmt(autoApproveLimit)}</span>
+          <span className="badge badge-neutral">
+            {paymentCount} payment request{paymentCount !== 1 ? "s" : ""} tracked
+          </span>
+          <span className={pendingPayments.length > 0 ? "badge badge-warning" : "badge badge-success"}>
+            {pendingPayments.length > 0 ? `${pendingPayments.length} waiting` : "Queue clear"}
+          </span>
         </div>
       </section>
 
@@ -211,41 +168,124 @@ export default function Dashboard() {
         </div>
       )}
 
-      {payments.length === 0 && (
-        <div className="card p-6 animate-in-delay-1">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
-              <Sparkles className="h-5 w-5 text-primary" />
+      {(() => {
+        const hasPolicies = company && company.policy.autoApproveLimit.toNumber() > 0;
+        const hasPayments = payments.length > 0;
+        const hasExecuted = payments.some(p => p.account.status.executed !== undefined);
+        const hasVaultBalance = vaultBalance > 0;
+        const totalSteps = 5;
+        const completedSteps = [hasPolicies, hasVaultBalance, hasPayments, hasExecuted].filter(Boolean).length;
+        const allDone = completedSteps >= 4;
+
+        const steps = [
+          {
+            done: hasPolicies,
+            icon: Shield,
+            title: "Set treasury policies",
+            desc: "Auto-approve, dual-approval threshold, monthly burn cap",
+            hint: "Sidebar → Policies → adjust sliders → Save",
+            href: "/policies",
+          },
+          {
+            done: hasVaultBalance,
+            icon: Wallet,
+            title: "Fund the vault",
+            desc: "Deposit USDC so payments can be executed",
+            hint: "Click the Deposit button above → enter amount → sign",
+            href: undefined,
+            action: () => setShowDeposit(true),
+          },
+          {
+            done: hasPayments,
+            icon: Upload,
+            title: "Upload an invoice or create a payment",
+            desc: "AI parses the invoice, routes it through policy, creates on-chain payment",
+            hint: "Sidebar → Invoices → drag a PDF/PNG → save → enter wallet → create payment",
+            href: "/invoices",
+          },
+          {
+            done: hasExecuted,
+            icon: Stamp,
+            title: "Approve & execute a payment",
+            desc: "Sign the payment, then execute to transfer USDC from vault",
+            hint: "Sidebar → Approvals → Approve → Execute",
+            href: "/approvals",
+          },
+          {
+            done: false, // always show proofs as a next step
+            icon: Eye,
+            title: "Generate selective disclosure proofs",
+            desc: "Investor sees aggregates, auditor sees pseudonymized data, regulator sees everything",
+            hint: "Sidebar → Proofs → pick a view → Anchor On-Chain",
+            href: "/proofs",
+          },
+        ];
+
+        if (allDone) return null;
+
+        return (
+          <div className="card p-6 animate-in-delay-1">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="section-title">Demo Walkthrough</h3>
+                <p className="text-[12px] text-muted-foreground mt-1">
+                  {completedSteps}/{totalSteps} steps done — follow the path to see the full treasury workflow
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: totalSteps }).map((_, i) => (
+                  <div key={i} className={`h-1.5 w-6 rounded-full ${i < completedSteps ? "bg-success" : "bg-secondary"}`} />
+                ))}
+              </div>
             </div>
-            <div>
-              <h3 className="section-title">Getting Started</h3>
-              <p className="text-[12px] text-muted-foreground">Follow these steps to see the full treasury workflow</p>
+
+            <div className="space-y-2">
+              {steps.map((step, i) => {
+                const Icon = step.icon;
+                const isNext = !step.done && steps.slice(0, i).every(s => s.done);
+                const cls = `flex items-center gap-4 w-full rounded-xl px-4 py-3 text-left transition-all ${
+                  step.done
+                    ? "bg-success/5 border border-success/10"
+                    : isNext
+                      ? "bg-primary/5 border border-primary/20 hover:border-primary/40"
+                      : "bg-secondary/30 border border-border opacity-60"
+                }`;
+
+                const inner = (<>
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      step.done ? "bg-success/10" : isNext ? "bg-primary/10" : "bg-secondary"
+                    }`}>
+                      {step.done
+                        ? <CheckCircle2 className="h-4 w-4 text-success" />
+                        : <Icon className={`h-4 w-4 ${isNext ? "text-primary" : "text-muted-foreground"}`} />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[13px] font-medium ${step.done ? "line-through text-muted-foreground" : ""}`}>
+                        {step.title}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {step.done ? step.desc : isNext ? step.hint : step.desc}
+                      </p>
+                    </div>
+                    {!step.done && isNext && (
+                      <ArrowRight className="h-4 w-4 text-primary shrink-0" />
+                    )}
+                    {step.done && (
+                      <span className="text-[10px] text-success font-medium shrink-0">Done</span>
+                    )}
+                  </>
+                );
+
+                if (step.href) {
+                  return <Link key={step.title} href={step.href} className={cls}>{inner}</Link>;
+                }
+                return <button key={step.title} onClick={step.action} className={cls}>{inner}</button>;
+              })}
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Link href="/policies" className="metric-tile hover:border-primary/20 transition-colors">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold mb-2">1</div>
-              <p className="text-[13px] font-medium">Set Policies</p>
-              <p className="text-[11px] text-muted-foreground mt-1">Auto-approve limit, burn cap, dual approval threshold</p>
-            </Link>
-            <Link href="/invoices" className="metric-tile hover:border-primary/20 transition-colors">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold mb-2">2</div>
-              <p className="text-[13px] font-medium">Upload Invoice</p>
-              <p className="text-[11px] text-muted-foreground mt-1">AI parses vendor, amount, category from any PDF/image</p>
-            </Link>
-            <Link href="/approvals" className="metric-tile hover:border-primary/20 transition-colors">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold mb-2">3</div>
-              <p className="text-[13px] font-medium">Approve & Execute</p>
-              <p className="text-[11px] text-muted-foreground mt-1">Sign pending payments, execute approved ones</p>
-            </Link>
-            <Link href="/proofs" className="metric-tile hover:border-primary/20 transition-colors">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold mb-2">4</div>
-              <p className="text-[13px] font-medium">Generate Proofs</p>
-              <p className="text-[11px] text-muted-foreground mt-1">Selective disclosure for investors, auditors, regulators</p>
-            </Link>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {pendingPayments.length > 0 && (
         <Link href="/approvals" className="card flex items-center gap-3 px-4 py-3 transition-colors hover:border-warning/30 animate-in-delay-1">
