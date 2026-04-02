@@ -106,6 +106,7 @@ pub struct RemoveMember<'info> {
 pub fn handle_remove_member(ctx: Context<RemoveMember>) -> Result<()> {
     let member = &mut ctx.accounts.target_member;
     require!(member.is_active, MemberError::MemberAlreadyInactive);
+    require!(ctx.accounts.company.member_count > 0, MemberError::MaxMembersReached);
     member.is_active = false;
     ctx.accounts.company.member_count -= 1;
 

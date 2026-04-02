@@ -29,7 +29,7 @@ export default function Dashboard() {
   const memberCount = company ? company.memberCount : 1;
   const paymentCount = company ? company.paymentNonce.toNumber() : 0;
   const pendingPayments = payments.filter((p) => p.account.status.pending !== undefined);
-  const runway = monthlySpent > 0 ? vaultBalance / monthlySpent : 99;
+  const runway = monthlySpent > 0 ? vaultBalance / monthlySpent : 0;
 
   const handleDeposit = async () => {
     const amt = parseFloat(depositAmount);
@@ -143,7 +143,9 @@ export default function Dashboard() {
         <div className="card p-5 animate-in-delay-3">
           <div className="text-label mb-3">Runway</div>
           <div className="stat-value">
-            {runway > 50 ? (
+            {monthlySpent === 0 ? (
+              <span className="text-muted-foreground">N/A</span>
+            ) : runway > 50 ? (
               <span className="text-success">Safe</span>
             ) : (
               <>{runway.toFixed(1)}<span className="text-base font-normal text-muted-foreground ml-1">mo</span></>

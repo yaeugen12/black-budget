@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useCompany } from "@/lib/company-context";
-import { CheckCircle2, XCircle, AlertTriangle, User, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, User, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
 
 function truncatePubkey(key: string): string {
   if (key.length <= 10) return key;
@@ -11,21 +11,20 @@ function truncatePubkey(key: string): string {
 }
 
 export default function ApprovalsPage() {
-  const { payments, approvePayment, rejectPayment, refresh, loading } = useCompany();
+  const { payments, approvePayment, rejectPayment, executePayment, refresh, loading } = useCompany();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [processing, setProcessing] = useState<Record<string, "approving" | "rejecting">>({});
+  const [processing, setProcessing] = useState<Record<string, "approving" | "rejecting" | "executing">>({});
 
-  // Filter to only pending payments
-  const pendingPayments = payments.filter((p) => {
+  // Filter to pending and approved payments
+  const actionablePayments = payments.filter((p) => {
     const status = Object.keys(p.account.status)[0].toLowerCase();
-    return status === "pending";
+    return status === "pending" || status === "approved";
   });
 
   const handleApprove = async (paymentId: number, key: string) => {
     setProcessing((prev) => ({ ...prev, [key]: "approving" }));
     try {
       await approvePayment(paymentId);
-      await refresh();
     } catch (e) {
       // toast already handled in context
     } finally {
@@ -41,6 +40,21 @@ export default function ApprovalsPage() {
     setProcessing((prev) => ({ ...prev, [key]: "rejecting" }));
     try {
       await rejectPayment(paymentId);
+    } catch (e) {
+      // toast already handled in context
+    } finally {
+      setProcessing((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const handleExecute = async (paymentId: number, recipientPubkey: string, key: string) => {
+    setProcessing((prev) => ({ ...prev, [key]: "executing" }));
+    try {
+      await executePayment(paymentId, recipientPubkey);
       await refresh();
     } catch (e) {
       // toast already handled in context
@@ -64,21 +78,21 @@ export default function ApprovalsPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Pending Approvals</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Approvals &amp; Execution</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {pendingPayments.length} payment{pendingPayments.length !== 1 ? "s" : ""} waiting for your approval
+          {actionablePayments.length} payment{actionablePayments.length !== 1 ? "s" : ""} waiting for action
         </p>
       </div>
 
-      {pendingPayments.length === 0 ? (
+      {actionablePayments.length === 0 ? (
         <div className="glass rounded-xl p-10 text-center">
           <CheckCircle2 className="w-10 h-10 text-[var(--success)] mx-auto mb-3" />
-          <p className="text-muted-foreground">No pending approvals</p>
+          <p className="text-muted-foreground">No pending actions</p>
           <p className="text-xs text-muted-foreground mt-1">All payments have been processed</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {pendingPayments.map((p) => {
+          {actionablePayments.map((p) => {
             const acct = p.account;
             const key = p.publicKey.toBase58();
             const paymentId = acct.paymentId.toNumber();
@@ -93,6 +107,8 @@ export default function ApprovalsPage() {
             const requiredApprovals = acct.requiredApprovals;
             const createdAt = new Date(acct.createdAt.toNumber() * 1000).toLocaleDateString();
             const isProcessing = processing[key];
+            const status = Object.keys(acct.status)[0].toLowerCase();
+            const recipientPubkey = acct.recipient.toBase58();
 
             return (
               <div key={key} className="glass rounded-xl overflow-hidden">
@@ -109,6 +125,9 @@ export default function ApprovalsPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium font-mono text-sm">{displayId}</span>
                         <span className="text-sm text-muted-foreground">to {truncatePubkey(acct.recipient.toBase58())}</span>
+                        {status === "approved" && (
+                          <span className="badge-success text-xs px-2 py-0.5 rounded">Approved</span>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {categoryLabel} · {createdAt} · by {requester}
@@ -179,7 +198,16 @@ export default function ApprovalsPage() {
                     {isProcessing ? (
                       <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-secondary text-muted-foreground text-sm font-medium">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        {isProcessing === "approving" ? "Approving..." : "Rejecting..."}
+                        {isProcessing === "approving" ? "Approving..." : isProcessing === "rejecting" ? "Rejecting..." : "Executing..."}
+                      </div>
+                    ) : status === "approved" ? (
+                      <div className="flex items-center gap-3 pt-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleExecute(paymentId, recipientPubkey, key); }}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[var(--success)]/20 text-[var(--success)] font-medium text-sm hover:bg-[var(--success)]/30 transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" /> Execute Payment
+                        </button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-3 pt-2">

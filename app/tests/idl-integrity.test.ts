@@ -13,7 +13,7 @@ describe("IDL Integrity", () => {
     expect(() => new PublicKey(IDL.address)).not.toThrow();
   });
 
-  it("has all 9 instructions", () => {
+  it("has all 10 instructions", () => {
     const names = IDL.instructions.map((i) => i.name);
     expect(names).toContain("initialize_company");
     expect(names).toContain("add_member");
@@ -22,9 +22,10 @@ describe("IDL Integrity", () => {
     expect(names).toContain("approve_payment");
     expect(names).toContain("reject_payment");
     expect(names).toContain("execute_payment");
+    expect(names).toContain("remove_member");
     expect(names).toContain("record_proof");
     expect(names).toContain("record_compliance_proof");
-    expect(IDL.instructions.length).toBe(9);
+    expect(IDL.instructions.length).toBe(10);
   });
 
   it("has correct discriminators (SHA-256 of global:name)", () => {

@@ -14,7 +14,6 @@ import {
   History,
 } from "lucide-react";
 import { getInvoicesSync, saveInvoice, isNewVendor, type StoredInvoice } from "@/lib/invoice-store";
-import { useCompany } from "@/lib/company-context";
 import { toast } from "sonner";
 
 interface ParsedInvoice {
@@ -67,7 +66,6 @@ async function parseInvoiceAI(file: File): Promise<{ invoice: ParsedInvoice; pol
 }
 
 export default function InvoicesPage() {
-  const { createPayment } = useCompany();
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -124,15 +122,6 @@ export default function InvoicesPage() {
         createdAt: new Date().toISOString(),
         status: policyResult.action === "auto_approve" ? "paid" : "submitted",
       });
-
-      // Create on-chain payment if we have recipient and amount
-      if (parsed.vendor && parsed.amount) {
-        try {
-          await createPayment(parsed.vendor, parsed.amount, parsed.category || "vendor", `Invoice payment: ${file.name}`);
-        } catch (e) {
-          console.error("On-chain payment failed:", e);
-        }
-      }
     }
     setSubmitted(true);
   };
@@ -312,7 +301,7 @@ export default function InvoicesPage() {
           </h3>
           <p className="text-muted-foreground mt-2">
             {policyResult?.action === "auto_approve"
-              ? `$${parsed?.amount.toLocaleString()} USDC sent to ${parsed?.vendor} via confidential transfer`
+              ? `$${parsed?.amount.toLocaleString()} USDC invoice from ${parsed?.vendor} approved — create payment from the Payments page`
               : `Waiting for ${policyResult?.requiredApprovers} approval(s) from authorized members`}
           </p>
           <button onClick={reset} className="mt-4 text-primary text-sm hover:underline">

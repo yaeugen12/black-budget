@@ -260,7 +260,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
       const tx = await program.methods.createPayment(
         new BN(amount * 1_000_000),
-        { [category]: {} } || { other: {} },
+        { [category]: {} },
         descriptionHash, memo.slice(0, 128), 0
       ).accounts({
         requester: wallet.publicKey, company: compPDA,
@@ -302,7 +302,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const compPDA = getCompanyPDA(company.authority);
       const recipientKey = new PublicKey(recipientPubkey);
       const recipientATA = getAssociatedTokenAddressSync(
-        USDC_MINT, recipientKey, true, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+        USDC_MINT, recipientKey, false, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
       const tx = await program.methods.executePayment().accounts({
@@ -312,8 +312,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         payment: getPaymentPDA(compPDA, paymentId),
         vault: getVaultPDA(compPDA),
         recipientTokenAccount: recipientATA,
+        recipient: recipientKey,
         usdcMint: USDC_MINT,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SYSTEM,
       }).rpc();
       await refresh();
       return tx;

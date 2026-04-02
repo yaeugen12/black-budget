@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useCompany } from "@/lib/company-context";
 import {
   CheckCircle2,
@@ -28,9 +28,10 @@ function truncatePubkey(key: string): string {
 }
 
 export default function PaymentsPage() {
-  const { payments, loading } = useCompany();
+  const { payments, loading, executePayment, refresh } = useCompany();
   const [amountsVisible, setAmountsVisible] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [executing, setExecuting] = useState<string | null>(null);
 
   const rows = payments.map((p) => {
     const acct = p.account;
@@ -41,6 +42,7 @@ export default function PaymentsPage() {
       paymentId: acct.paymentId.toNumber(),
       id: `BB-${String(acct.paymentId.toNumber() + 1).padStart(3, "0")}`,
       recipient: truncatePubkey(acct.recipient.toBase58()),
+      recipientFull: acct.recipient.toBase58(),
       amount: acct.amount.toNumber() / 1_000_000,
       category: category.charAt(0).toUpperCase() + category.slice(1),
       status,
@@ -51,6 +53,18 @@ export default function PaymentsPage() {
   });
 
   const filtered = filter === "all" ? rows : rows.filter((p) => p.status === filter);
+
+  const handleExecute = useCallback(async (paymentId: number, recipientPubkey: string, key: string) => {
+    setExecuting(key);
+    try {
+      await executePayment(paymentId, recipientPubkey);
+      await refresh();
+    } catch (e) {
+      // toast already handled in context
+    } finally {
+      setExecuting(null);
+    }
+  }, [executePayment, refresh]);
 
   if (loading) {
     return (
@@ -111,6 +125,7 @@ export default function PaymentsPage() {
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Date</th>
                 <th className="px-5 py-3 text-right">Amount</th>
+                <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -131,6 +146,21 @@ export default function PaymentsPage() {
                     <td className="px-5 py-4 text-sm text-muted-foreground">{payment.createdAt}</td>
                     <td className="px-5 py-4 text-right font-mono text-sm">
                       {amountsVisible ? `$${payment.amount.toLocaleString()}` : "-----"}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      {payment.status === "approved" && (
+                        <button
+                          disabled={executing === payment.publicKey}
+                          onClick={() => handleExecute(payment.paymentId, payment.recipientFull, payment.publicKey)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--success)]/20 text-[var(--success)] hover:bg-[var(--success)]/30 transition-colors disabled:opacity-50"
+                        >
+                          {executing === payment.publicKey ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> Executing...</>
+                          ) : (
+                            <><ExternalLink className="w-3 h-3" /> Execute</>
+                          )}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
