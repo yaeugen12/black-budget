@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import dynamic from "next/dynamic";
+import { useCompany } from "@/lib/company-context";
 import {
   LayoutDashboard,
   FileText,
@@ -9,10 +11,9 @@ import {
   Users,
   Shield,
   Eye,
-  Wallet,
   ArrowUpDown,
+  ChevronRight,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -22,7 +23,7 @@ const WalletMultiButton = dynamic(
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Invoices", href: "/invoices", icon: FileText },
-  { name: "Approvals", href: "/approvals", icon: CheckCircle2 },
+  { name: "Approvals", href: "/approvals", icon: CheckCircle2, badge: true },
   { name: "Payments", href: "/payments", icon: ArrowUpDown },
   { name: "Team", href: "/team", icon: Users },
   { name: "Policies", href: "/policies", icon: Shield },
@@ -31,57 +32,79 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { company, payments } = useCompany();
+  const pendingCount = payments.filter((p) => p.account.status.pending !== undefined).length;
 
   return (
-    <aside className="hidden lg:flex lg:flex-col lg:w-64 border-r border-border bg-card">
+    <aside className="hidden lg:flex lg:flex-col lg:w-[260px] border-r border-border bg-card/50">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-border">
-        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-          <Wallet className="w-4 h-4 text-primary" />
+      <div className="flex items-center gap-3 px-5 h-16 border-b border-border">
+        <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" className="text-primary" />
+            <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" className="text-primary opacity-60" />
+            <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" className="text-primary opacity-60" />
+            <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" className="text-primary opacity-30" />
+          </svg>
         </div>
-        <div>
-          <h1 className="font-semibold text-sm tracking-tight">Black Budget</h1>
-          <p className="text-xs text-muted-foreground">Private Finance OS</p>
+        <div className="min-w-0">
+          <h1 className="font-semibold text-[13px] tracking-tight truncate">
+            {company?.name || "Black Budget"}
+          </h1>
+          <p className="text-[11px] text-muted-foreground">Private Finance OS</p>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        <div className="text-label px-3 py-2">Menu</div>
         {navigation.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+              className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all duration-150 ${
                 isActive
                   ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-[rgba(255,255,255,0.03)]"
               }`}
             >
-              <item.icon className="w-4 h-4" />
-              {item.name}
-              {item.name === "Approvals" && (
-                <span className="ml-auto badge-warning text-xs px-1.5 py-0.5 rounded-full font-medium">
-                  3
+              <item.icon className={`w-[18px] h-[18px] ${isActive ? "" : "opacity-60 group-hover:opacity-100"}`} />
+              <span className="flex-1">{item.name}</span>
+              {item.badge && pendingCount > 0 && (
+                <span className="badge badge-warning">
+                  {pendingCount}
                 </span>
+              )}
+              {isActive && (
+                <ChevronRight className="w-3.5 h-3.5 opacity-40" />
               )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Wallet */}
-      <div className="p-4 border-t border-border">
+      {/* Footer: network + wallet */}
+      <div className="p-3 space-y-2 border-t border-border">
+        <div className="flex items-center justify-between px-3 py-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
+            <span className="text-[11px] text-muted-foreground">Devnet</span>
+          </div>
+          <span className="text-[11px] text-muted-foreground text-mono">v0.1.0</span>
+        </div>
         <WalletMultiButton
           style={{
             width: "100%",
-            height: "40px",
-            borderRadius: "8px",
-            fontSize: "13px",
-            backgroundColor: "var(--primary)",
-            color: "var(--primary-foreground)",
+            height: "38px",
+            borderRadius: "10px",
+            fontSize: "12px",
+            fontWeight: 500,
+            backgroundColor: "var(--secondary)",
+            color: "var(--foreground)",
             justifyContent: "center",
+            border: "1px solid var(--border)",
           }}
         />
       </div>

@@ -5,7 +5,6 @@ import {
   ArrowDownRight,
   Eye,
   EyeOff,
-  TrendingUp,
   Users,
   FileText,
   Clock,
@@ -13,7 +12,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   ExternalLink,
+  TrendingDown,
+  Plus,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useCompany } from "@/lib/company-context";
 
@@ -21,166 +23,149 @@ export default function Dashboard() {
   const { company, companyPDA, payments } = useCompany();
   const [balanceVisible, setBalanceVisible] = useState(true);
 
-  // Derive stats from on-chain data
   const totalSpent = company ? company.totalSpent.toNumber() / 1_000_000 : 0;
   const monthlySpent = company ? company.monthlySpent.toNumber() / 1_000_000 : 0;
   const autoApproveLimit = company ? company.policy.autoApproveLimit.toNumber() / 1_000_000 : 5000;
   const memberCount = company ? company.memberCount : 1;
   const paymentCount = company ? company.paymentNonce.toNumber() : 0;
-
-  const pendingPayments = payments.filter(
-    (p) => p.account.status.pending !== undefined
-  );
-  const executedPayments = payments.filter(
-    (p) => p.account.status.executed !== undefined
-  );
-
-  // Mock balance (in production: read vault token account)
+  const pendingPayments = payments.filter((p) => p.account.status.pending !== undefined);
   const vaultBalance = 284_750 - totalSpent;
   const runway = monthlySpent > 0 ? vaultBalance / monthlySpent : 99;
 
-  const policyAlerts = [];
-  if (company && company.policy.minRunwayMonths > 0 && runway < company.policy.minRunwayMonths) {
-    policyAlerts.push({
-      type: "warning",
-      message: `Runway below ${company.policy.minRunwayMonths} months — discretionary spend monitoring active`,
-    });
-  }
-  if (pendingPayments.length > 0) {
-    policyAlerts.push({
-      type: "info",
-      message: `${pendingPayments.length} payment(s) awaiting approval`,
-    });
-  }
+  const fmt = (n: number) => balanceVisible ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 0 })}` : "--------";
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {company?.name || "Dashboard"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {companyPDA ? (
-              <a
-                href={`https://explorer.solana.com/address/${companyPDA.toBase58()}?cluster=devnet`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 hover:text-primary transition-colors"
-              >
-                {companyPDA.toBase58().slice(0, 16)}...
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            ) : (
-              "Financial overview"
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Shield className="w-3.5 h-3.5 text-primary" />
-          <span>On-chain · Devnet</span>
-        </div>
-      </div>
-
-      {/* Policy Alerts */}
-      {policyAlerts.map((alert, i) => (
-        <div
-          key={i}
-          className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm ${
-            alert.type === "warning" ? "badge-warning" : "badge-info"
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          {alert.message}
-        </div>
-      ))}
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass rounded-xl p-5 glow-purple">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Treasury Balance</span>
-            <button
-              onClick={() => setBalanceVisible(!balanceVisible)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+          <h1 className="text-heading">{company?.name || "Dashboard"}</h1>
+          {companyPDA && (
+            <a
+              href={`https://explorer.solana.com/address/${companyPDA.toBase58()}?cluster=devnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-primary transition-colors mt-0.5 text-mono"
             >
-              {balanceVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            </button>
+              {companyPDA.toBase58().slice(0, 12)}...{companyPDA.toBase58().slice(-4)}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setBalanceVisible(!balanceVisible)}
+            className="btn-ghost"
+          >
+            {balanceVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
+          <Link href="/invoices" className="btn-primary text-[13px] py-2 px-4">
+            <Plus className="w-4 h-4" /> New Payment
+          </Link>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {pendingPayments.length > 0 && (
+        <Link href="/approvals" className="card flex items-center gap-3 px-4 py-3 hover:border-warning/30 transition-colors animate-in-delay-1">
+          <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-warning" />
           </div>
-          <div className="text-3xl font-bold font-mono">
-            {balanceVisible ? `$${vaultBalance.toLocaleString()}` : "••••••••"}
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium">{pendingPayments.length} payment{pendingPayments.length > 1 ? "s" : ""} awaiting approval</p>
+            <p className="text-[12px] text-muted-foreground">Click to review and approve</p>
           </div>
-          <div className="flex items-center gap-1 mt-2 text-sm text-[var(--success)]">
-            <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>USDC vault on Solana</span>
+          <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
+        </Link>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Balance */}
+        <div className="card-highlight p-5 animate-in-delay-1">
+          <div className="text-label mb-3">Treasury Balance</div>
+          <div className="stat-value">{fmt(vaultBalance)}</div>
+          <div className="flex items-center gap-1.5 mt-2">
+            <div className="badge badge-success">
+              <ArrowUpRight className="w-3 h-3" /> USDC
+            </div>
           </div>
         </div>
 
-        <div className="glass rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Total Spent</span>
-            <TrendingUp className="w-4 h-4 text-muted-foreground" />
-          </div>
-          <div className="text-3xl font-bold font-mono">
-            {balanceVisible ? `$${totalSpent.toLocaleString()}` : "••••••"}
-          </div>
-          <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
-            <span>{paymentCount} payments executed</span>
+        {/* Monthly Spend */}
+        <div className="card p-5 animate-in-delay-2">
+          <div className="text-label mb-3">Total Spent</div>
+          <div className="stat-value">{fmt(totalSpent)}</div>
+          <div className="text-[12px] text-muted-foreground mt-2">
+            {paymentCount} payment{paymentCount !== 1 ? "s" : ""} executed
           </div>
         </div>
 
-        <div className="glass rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Runway</span>
-            <Clock className="w-4 h-4 text-muted-foreground" />
+        {/* Runway */}
+        <div className="card p-5 animate-in-delay-3">
+          <div className="text-label mb-3">Runway</div>
+          <div className="stat-value">
+            {runway > 50 ? (
+              <span className="text-success">Safe</span>
+            ) : (
+              <>{runway.toFixed(1)}<span className="text-base font-normal text-muted-foreground ml-1">mo</span></>
+            )}
           </div>
-          <div className="text-3xl font-bold font-mono">
-            {runway > 50 ? "∞" : runway.toFixed(1)} <span className="text-lg text-muted-foreground">months</span>
-          </div>
-          <div className="w-full bg-secondary rounded-full h-2 mt-3">
-            <div
-              className={`rounded-full h-2 transition-all ${runway < 6 ? "bg-[var(--destructive)]" : runway < 12 ? "bg-[var(--warning)]" : "bg-[var(--success)]"}`}
-              style={{ width: `${Math.min((runway / 24) * 100, 100)}%` }}
-            />
+          <div className="mt-3">
+            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  runway < 6 ? "bg-destructive" : runway < 12 ? "bg-warning" : "bg-success"
+                }`}
+                style={{ width: `${Math.min((runway / 24) * 100, 100)}%` }}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="glass rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Pending</span>
-            <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+        {/* Pending */}
+        <div className="card p-5 animate-in-delay-4">
+          <div className="text-label mb-3">Active</div>
+          <div className="flex items-baseline gap-4">
+            <div>
+              <span className="stat-value text-warning">{pendingPayments.length}</span>
+              <span className="text-[12px] text-muted-foreground ml-1">pending</span>
+            </div>
           </div>
-          <div className="text-3xl font-bold font-mono text-[var(--warning)]">
-            {pendingPayments.length}
-          </div>
-          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 mt-2 text-[12px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" /> {memberCount} member{memberCount !== 1 ? "s" : ""}
+              <Users className="w-3 h-3" /> {memberCount}
             </span>
             <span className="flex items-center gap-1">
-              <FileText className="w-3 h-3" /> Auto-approve &lt; ${autoApproveLimit.toLocaleString()}
+              <Shield className="w-3 h-3" /> Auto &lt;{fmt(autoApproveLimit)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Recent On-chain Payments */}
-      <div className="glass rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium">On-Chain Payments</h3>
-          <a href="/payments" className="text-xs text-primary hover:underline">View all</a>
+      {/* Recent Payments */}
+      <div className="card animate-in-delay-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h3 className="text-[13px] font-semibold">Recent Activity</h3>
+          <Link href="/payments" className="btn-ghost text-[12px] py-1 px-2">
+            View all
+          </Link>
         </div>
 
         {payments.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No payments yet</p>
-            <p className="text-xs mt-1">Upload an invoice to create your first payment</p>
+          <div className="text-center py-12 px-5">
+            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-3">
+              <FileText className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <p className="text-[13px] font-medium">No payments yet</p>
+            <p className="text-[12px] text-muted-foreground mt-1">Upload an invoice to create your first payment</p>
+            <Link href="/invoices" className="btn-primary text-[13px] mt-4 py-2 px-4 inline-flex">
+              <Plus className="w-4 h-4" /> New Payment
+            </Link>
           </div>
         ) : (
-          <div className="space-y-1">
-            {payments.slice(0, 5).map((payment) => {
+          <div className="divide-y divide-border">
+            {payments.slice(0, 6).map((payment, i) => {
               const status = payment.account.status;
               const isPending = status.pending !== undefined;
               const isExecuted = status.executed !== undefined;
@@ -189,34 +174,28 @@ export default function Dashboard() {
               return (
                 <div
                   key={payment.publicKey.toBase58()}
-                  className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-secondary/50 transition-colors"
+                  className="flex items-center justify-between px-5 py-3.5 hover:bg-[rgba(255,255,255,0.015)] transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        isExecuted ? "bg-[var(--success)]" : isPending ? "bg-[var(--warning)] pulse-subtle" : "bg-[var(--destructive)]"
-                      }`}
-                    />
-                    <div>
-                      <div className="text-sm font-medium font-mono">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${
+                      isExecuted ? "bg-success" : isPending ? "bg-warning pulse-dot" : "bg-destructive"
+                    }`} />
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium truncate">
                         Payment #{payment.account.paymentId.toNumber()}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
                         {payment.account.memo || "No memo"} · {payment.account.approvals.length}/{payment.account.requiredApprovals} approvals
-                      </div>
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono">
-                      {balanceVisible
-                        ? `$${(payment.account.amount.toNumber() / 1_000_000).toLocaleString()}`
-                        : "•••••"}
-                    </div>
-                    <div className="text-xs">
-                      {isExecuted && <span className="text-[var(--success)]">Executed</span>}
-                      {isPending && <span className="text-[var(--warning)]">Pending</span>}
-                      {isRejected && <span className="text-destructive">Rejected</span>}
-                    </div>
+                  <div className="text-right shrink-0 ml-4">
+                    <p className="text-[13px] text-mono font-medium">
+                      {balanceVisible ? `$${(payment.account.amount.toNumber() / 1_000_000).toLocaleString()}` : "••••"}
+                    </p>
+                    {isExecuted && <span className="badge badge-success">Done</span>}
+                    {isPending && <span className="badge badge-warning">Pending</span>}
+                    {isRejected && <span className="badge badge-danger">Rejected</span>}
                   </div>
                 </div>
               );

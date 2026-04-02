@@ -1,16 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCompany } from "@/lib/company-context";
-
-const WalletMultiButton = dynamic(
-  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
-  { ssr: false }
-);
 import {
-  Wallet,
   Building2,
   ArrowRight,
   Loader2,
@@ -18,112 +12,136 @@ import {
   Shield,
   Sparkles,
   Zap,
+  Lock,
+  Eye,
+  ExternalLink,
 } from "lucide-react";
+
+const WalletMultiButton = dynamic(
+  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
+  { ssr: false }
+);
 
 export function Onboarding() {
   const wallet = useWallet();
   const { initializeCompany, loading } = useCompany();
-
-  const [step, setStep] = useState<"connect" | "create" | "creating" | "done">(
-    wallet.connected ? "create" : "connect"
-  );
+  const [mounted, setMounted] = useState(false);
+  const [step, setStep] = useState<"connect" | "create" | "creating" | "done">("connect");
   const [companyName, setCompanyName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    if (wallet.connected && step === "connect") setStep("create");
+    if (!wallet.connected) setStep("connect");
+  }, [wallet.connected, step]);
 
   const handleCreate = async () => {
     if (!companyName.trim()) return;
     setStep("creating");
     setError(null);
-
     try {
       const tx = await initializeCompany(companyName.trim());
       setTxSig(tx);
       setStep("done");
     } catch (e: any) {
       console.error("Create company error:", e);
-      setError(e.message || "Failed to create company");
+      setError(e.message?.slice(0, 120) || "Failed to create company");
       setStep("create");
     }
   };
 
-  // Not connected
+  if (!mounted) return null;
+
+  // ─── Connect Wallet ─────────────────────────────────────────────
   if (!wallet.connected) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="max-w-md w-full text-center space-y-8">
-          <div className="space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto">
-              <Wallet className="w-8 h-8 text-primary" />
+      <div className="flex items-center justify-center min-h-screen px-6">
+        <div className="max-w-sm w-full space-y-10 animate-in">
+          {/* Brand */}
+          <div className="text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto float">
+              <Lock className="w-6 h-6 text-primary" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">Black Budget</h1>
-            <p className="text-muted-foreground">
-              The private finance operating system for internet-native companies
+            <div>
+              <h1 className="text-display text-2xl">Black Budget</h1>
+              <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto leading-relaxed">
+                Private finance operating system for internet-native companies
+              </p>
+            </div>
+          </div>
+
+          {/* Features */}
+          <div className="space-y-2">
+            {[
+              { icon: Zap, text: "AI invoice processing with policy enforcement", delay: "animate-in-delay-1" },
+              { icon: Shield, text: "Confidential payments — amounts hidden on-chain", delay: "animate-in-delay-2" },
+              { icon: Eye, text: "Selective disclosure for investors & auditors", delay: "animate-in-delay-3" },
+            ].map(({ icon: Icon, text, delay }) => (
+              <div key={text} className={`card flex items-center gap-3 p-3.5 ${delay}`}>
+                <div className="w-8 h-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-primary" />
+                </div>
+                <span className="text-[13px] text-secondary-foreground/80">{text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Connect */}
+          <div className="animate-in-delay-4">
+            <WalletMultiButton
+              style={{
+                width: "100%",
+                height: "48px",
+                borderRadius: "12px",
+                fontSize: "14px",
+                fontWeight: 600,
+                backgroundColor: "var(--primary)",
+                color: "#fff",
+                justifyContent: "center",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1), 0 4px 16px rgba(139,92,246,0.2)",
+              }}
+            />
+            <p className="text-center text-[11px] text-muted-foreground mt-3">
+              Built on Solana  ·  Token-2022  ·  Devnet
             </p>
           </div>
-
-          <div className="space-y-3 text-sm text-left glass rounded-xl p-6">
-            <div className="flex items-center gap-3">
-              <Zap className="w-4 h-4 text-primary shrink-0" />
-              <span>AI-powered invoice processing with automatic policy enforcement</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Shield className="w-4 h-4 text-primary shrink-0" />
-              <span>Confidential payments on Solana — amounts hidden on-chain</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-4 h-4 text-primary shrink-0" />
-              <span>Selective disclosure proofs for investors, auditors, regulators</span>
-            </div>
-          </div>
-
-          <WalletMultiButton
-            style={{
-              width: "100%",
-              height: "48px",
-              borderRadius: "12px",
-              fontSize: "15px",
-              backgroundColor: "var(--primary)",
-              color: "var(--primary-foreground)",
-              justifyContent: "center",
-              fontWeight: 600,
-            }}
-          />
         </div>
       </div>
     );
   }
 
-  // Loading existing company
+  // ─── Loading ────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
-          <p className="text-muted-foreground">Loading your company...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4 animate-in">
+          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Checking on-chain data...</p>
         </div>
       </div>
     );
   }
 
-  // Create company
+  // ─── Create Company ─────────────────────────────────────────────
   if (step === "create" || step === "creating") {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="max-w-md w-full space-y-6">
+      <div className="flex items-center justify-center min-h-screen px-6">
+        <div className="max-w-sm w-full space-y-6 animate-in">
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto">
-              <Building2 className="w-7 h-7 text-primary" />
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+              <Building2 className="w-5 h-5 text-primary" />
             </div>
-            <h2 className="text-2xl font-bold">Create Your Company</h2>
+            <h2 className="text-heading">Create Your Company</h2>
             <p className="text-sm text-muted-foreground">
-              This creates an on-chain treasury vault with role-based access control
+              Deploy an on-chain treasury with role-based access
             </p>
           </div>
 
-          <div className="glass rounded-xl p-6 space-y-4">
+          <div className="card p-5 space-y-4">
             <div>
-              <label className="text-sm font-medium block mb-2">Company Name</label>
+              <label className="text-label block mb-2">Company Name</label>
               <input
                 type="text"
                 value={companyName}
@@ -131,23 +149,23 @@ export function Onboarding() {
                 placeholder="e.g., Acme Labs"
                 maxLength={64}
                 disabled={step === "creating"}
-                className="w-full bg-secondary rounded-lg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                className="input"
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                autoFocus
               />
             </div>
 
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>This will:</p>
-              <ul className="space-y-1 ml-4">
-                <li>• Deploy a company vault (Token-2022 USDC)</li>
-                <li>• Add you as Owner with full permissions</li>
-                <li>• Set default treasury policies</li>
-                <li>• Cost ~0.01 SOL in transaction fees</li>
-              </ul>
+            <div className="space-y-2 text-[12px] text-muted-foreground">
+              {["Token-2022 USDC vault", "Owner role with full permissions", "Default treasury policies", "~0.01 SOL in fees"].map((t) => (
+                <div key={t} className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
+                  <span>{t}</span>
+                </div>
+              ))}
             </div>
 
             {error && (
-              <div className="badge-danger rounded-lg px-4 py-2.5 text-sm">
+              <div className="badge-danger rounded-lg px-3 py-2.5 text-[12px] leading-relaxed">
                 {error}
               </div>
             )}
@@ -155,62 +173,56 @@ export function Onboarding() {
             <button
               onClick={handleCreate}
               disabled={!companyName.trim() || step === "creating"}
-              className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary w-full"
             >
               {step === "creating" ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Creating on Solana...
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" /> Creating on Solana...</>
               ) : (
-                <>
-                  Create Company
-                  <ArrowRight className="w-4 h-4" />
-                </>
+                <><Sparkles className="w-4 h-4" /> Create Company</>
               )}
             </button>
           </div>
 
-          <p className="text-xs text-center text-muted-foreground">
-            Connected: {wallet.publicKey?.toBase58().slice(0, 8)}...
+          <p className="text-[11px] text-center text-muted-foreground text-mono">
+            {wallet.publicKey?.toBase58().slice(0, 4)}...{wallet.publicKey?.toBase58().slice(-4)}
           </p>
         </div>
       </div>
     );
   }
 
-  // Success
+  // ─── Success ────────────────────────────────────────────────────
   if (step === "done") {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="max-w-md w-full text-center space-y-6">
-          <CheckCircle2 className="w-16 h-16 text-[var(--success)] mx-auto" />
+      <div className="flex items-center justify-center min-h-screen px-6">
+        <div className="max-w-sm w-full text-center space-y-6 animate-in">
+          <div className="w-16 h-16 rounded-full bg-success/10 border border-success/20 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8 text-success" />
+          </div>
           <div>
-            <h2 className="text-2xl font-bold">Company Created!</h2>
-            <p className="text-muted-foreground mt-2">
-              <strong>{companyName}</strong> is now live on Solana
+            <h2 className="text-heading">Company Created</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              <strong className="text-foreground">{companyName}</strong> is live on Solana Devnet
             </p>
           </div>
 
           {txSig && (
-            <div className="glass rounded-lg px-4 py-3 text-xs">
-              <span className="text-muted-foreground">TX: </span>
-              <a
-                href={`https://explorer.solana.com/tx/${txSig}?cluster=devnet`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline font-mono"
-              >
-                {txSig.slice(0, 20)}...
-              </a>
-            </div>
+            <a
+              href={`https://explorer.solana.com/tx/${txSig}?cluster=devnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="card flex items-center justify-center gap-2 px-4 py-3 text-[12px] text-primary hover:border-primary/30 transition-colors"
+            >
+              <span className="text-mono">{txSig.slice(0, 24)}...</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           )}
 
           <button
             onClick={() => window.location.reload()}
-            className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium"
+            className="btn-primary w-full"
           >
-            Go to Dashboard
+            Open Dashboard <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
