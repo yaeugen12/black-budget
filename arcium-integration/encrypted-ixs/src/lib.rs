@@ -80,24 +80,23 @@ mod circuits {
     /// - `request_ctxt`: encrypted payment request from the requester's wallet.
     /// - `policy_ctxt`:  MXE-owned encrypted policy snapshot for the company.
     ///
-    /// Outputs:
-    /// - `decision`: encrypted decision under the requester's shared key.
-    /// - `policy`:   updated MXE-owned policy (only `monthly_spent` mutates).
+    /// Output:
+    /// - `decision`: encrypted PolicyDecision under the requester's shared key.
     ///
     /// The decision encrypts the required_approvals tier; the on-chain program
     /// stores the ciphertext on the PaymentRequest PDA. The frontend decrypts
     /// it client-side to render the approval flow.
     ///
-    /// IMPORTANT: This circuit does NOT commit the projected_monthly_spent to
-    /// the MXE policy. That happens in `commit_executed_payment` (only after
-    /// the SPL transfer succeeds). This prevents the "create-and-cancel ramp"
-    /// attack where many pending payments inflate monthly_spent before any
-    /// actually execute.
+    /// IMPORTANT: This circuit does NOT mutate the policy. The policy account
+    /// is read via `.account(policy_acc, ...)` on the host program and passes
+    /// through unchanged. monthly_spent only advances in `commit_executed_payment`
+    /// (called AFTER the SPL transfer succeeds), preventing the "create-and-cancel
+    /// ramp" attack where pending payments inflate monthly_spent.
     #[instruction]
     pub fn evaluate_policy(
         request_ctxt: Enc<Shared, PaymentRequest>,
         policy_ctxt: Enc<Mxe, CompanyPolicy>,
-    ) -> (Enc<Shared, PolicyDecision>, Enc<Mxe, CompanyPolicy>) {
+    ) -> Enc<Shared, PolicyDecision> {
         let request = request_ctxt.to_arcis();
         let policy = policy_ctxt.to_arcis();
 
@@ -129,11 +128,7 @@ mod circuits {
             projected_monthly_spent: projected,
         };
 
-        (
-            request_ctxt.owner.from_arcis(decision),
-            // Policy is returned unchanged at evaluation time — see doc comment above.
-            Mxe::get().from_arcis(policy),
-        )
+        request_ctxt.owner.from_arcis(decision)
     }
 
     /// Commit an executed payment's spend into the encrypted monthly accumulator.

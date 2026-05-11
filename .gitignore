@@ -11,6 +11,18 @@ test-ledger/
 tests/wallet-approver.json
 wallets/
 *.keypair.json
+*-keypair.json
+
+# Arcium build artifacts — contain private keys for localnet nodes,
+# trusted dealer, recovery peers, wallets. NEVER commit.
+arcium-integration/artifacts/
+arcium-integration/build/
+arcium-integration/target/
+arcium-integration/node_modules/
+arcium-integration/.anchor/
+arcium-integration/test-ledger/
+arcium-integration/Cargo.lock
+arcium-integration/client/node_modules/
 
 # Local research and scratch files
 scratchpad/

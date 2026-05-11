@@ -28,7 +28,7 @@ const COMP_DEF_OFFSET_COMMIT_SPEND: u32 = comp_def_offset("commit_executed_payme
 const COMP_DEF_OFFSET_RESET_MONTH: u32 = comp_def_offset("reset_monthly_spend");
 const COMP_DEF_OFFSET_UPDATE_LIMITS: u32 = comp_def_offset("update_policy_limits");
 
-declare_id!("ConfidentialPolicy1111111111111111111111111");
+declare_id!("EJphDwZdNmD972zPBjH3phvUga9Gamv21R1usMoQ4A6X");
 
 #[arcium_program]
 pub mod confidential_policy {
@@ -125,7 +125,7 @@ pub mod confidential_policy {
             &ctx.accounts.computation_account,
         ) {
             Ok(InitCompanyPolicyOutput { field_0 }) => field_0,
-            Err(_) => return Err(PolicyError::AbortedComputation.into()),
+            Err(_) => return Err(ErrorCode::AbortedComputation.into()),
         };
 
         // Persist MXE-owned ciphertexts on the policy PDA.
@@ -200,16 +200,10 @@ pub mod confidential_policy {
             vec![EvaluatePolicyCallback::callback_ix(
                 computation_offset,
                 &ctx.accounts.mxe_account,
-                &[
-                    CallbackAccount {
-                        pubkey: ctx.accounts.decision_acc.key(),
-                        is_writable: true,
-                    },
-                    CallbackAccount {
-                        pubkey: ctx.accounts.policy_acc.key(),
-                        is_writable: true,
-                    },
-                ],
+                &[CallbackAccount {
+                    pubkey: ctx.accounts.decision_acc.key(),
+                    is_writable: true,
+                }],
             )?],
             1,
             0,
@@ -223,24 +217,20 @@ pub mod confidential_policy {
         ctx: Context<EvaluatePolicyCallback>,
         output: SignedComputationOutputs<EvaluatePolicyOutput>,
     ) -> Result<()> {
-        let (decision_ctxt, policy_ctxt) = match output.verify_output(
+        let decision_ctxt = match output.verify_output(
             &ctx.accounts.cluster_account,
             &ctx.accounts.computation_account,
         ) {
-            Ok(EvaluatePolicyOutput { field_0, field_1 }) => (field_0, field_1),
-            Err(_) => return Err(PolicyError::AbortedComputation.into()),
+            Ok(EvaluatePolicyOutput { field_0 }) => field_0,
+            Err(_) => return Err(ErrorCode::AbortedComputation.into()),
         };
 
-        // Persist decision ciphertext on the per-payment PDA.
+        // Persist decision ciphertext on the per-payment PDA. Policy is read-only at
+        // this stage (see circuit doc — monthly accumulator only advances in
+        // commit_executed_payment).
         ctx.accounts.decision_acc.encrypted_decision = decision_ctxt.ciphertexts;
         ctx.accounts.decision_acc.decision_nonce = decision_ctxt.nonce;
         ctx.accounts.decision_acc.status = DecisionStatus::Evaluated;
-
-        // Policy is rewritten unchanged at this stage (see circuit doc — monthly
-        // accumulator only advances on commit_executed_payment). Update only the
-        // ciphertext payload in case re-keying happened.
-        ctx.accounts.policy_acc.encrypted_policy = policy_ctxt.ciphertexts;
-        ctx.accounts.policy_acc.nonce = policy_ctxt.nonce;
 
         emit!(PolicyEvaluated {
             company_id: ctx.accounts.decision_acc.company_id,
@@ -312,7 +302,7 @@ pub mod confidential_policy {
             &ctx.accounts.computation_account,
         ) {
             Ok(CommitExecutedPaymentOutput { field_0 }) => field_0,
-            Err(_) => return Err(PolicyError::AbortedComputation.into()),
+            Err(_) => return Err(ErrorCode::AbortedComputation.into()),
         };
 
         ctx.accounts.policy_acc.encrypted_policy = o.ciphertexts;
@@ -340,11 +330,11 @@ pub mod confidential_policy {
         require_keys_eq!(
             ctx.accounts.payer.key(),
             ctx.accounts.policy_acc.authority,
-            PolicyError::InvalidAuthority
+            ErrorCode::InvalidAuthority
         );
         require!(
             ctx.accounts.policy_acc.last_reset_month != current_month,
-            PolicyError::AlreadyResetThisMonth
+            ErrorCode::AlreadyResetThisMonth
         );
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
@@ -392,7 +382,7 @@ pub mod confidential_policy {
             &ctx.accounts.computation_account,
         ) {
             Ok(ResetMonthlySpendOutput { field_0 }) => field_0,
-            Err(_) => return Err(PolicyError::AbortedComputation.into()),
+            Err(_) => return Err(ErrorCode::AbortedComputation.into()),
         };
 
         ctx.accounts.policy_acc.encrypted_policy = o.ciphertexts;
@@ -418,7 +408,7 @@ pub mod confidential_policy {
         require_keys_eq!(
             ctx.accounts.payer.key(),
             ctx.accounts.policy_acc.authority,
-            PolicyError::InvalidAuthority
+            ErrorCode::InvalidAuthority
         );
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
@@ -469,7 +459,7 @@ pub mod confidential_policy {
             &ctx.accounts.computation_account,
         ) {
             Ok(UpdatePolicyLimitsOutput { field_0 }) => field_0,
-            Err(_) => return Err(PolicyError::AbortedComputation.into()),
+            Err(_) => return Err(ErrorCode::AbortedComputation.into()),
         };
 
         ctx.accounts.policy_acc.encrypted_policy = o.ciphertexts;
@@ -559,7 +549,7 @@ pub struct PolicyLimitsUpdated {
 // ═══ ERROR CODES ══════════════════════════════════════════════════════════
 
 #[error_code]
-pub enum PolicyError {
+pub enum ErrorCode {
     #[msg("MPC computation was aborted by the cluster")]
     AbortedComputation,
     #[msg("Caller is not the registered authority for this policy")]
@@ -698,18 +688,18 @@ pub struct InitCompanyPolicy<'info> {
     pub sign_pda_account: Account<'info, ArciumSignerAccount>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
-    #[account(mut, address = derive_mempool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: mempool_account, checked by the arcium program
     pub mempool_account: UncheckedAccount<'info>,
-    #[account(mut, address = derive_execpool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: executing_pool, checked by the arcium program
     pub executing_pool: UncheckedAccount<'info>,
-    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
     #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_INIT_POLICY))]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-    #[account(mut, address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(mut, address = ARCIUM_FEE_POOL_ACCOUNT_ADDRESS)]
     pub pool_account: Account<'info, FeePool>,
@@ -745,18 +735,18 @@ pub struct EvaluatePolicy<'info> {
     pub sign_pda_account: Account<'info, ArciumSignerAccount>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
-    #[account(mut, address = derive_mempool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: mempool_account, checked by the arcium program
     pub mempool_account: UncheckedAccount<'info>,
-    #[account(mut, address = derive_execpool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: executing_pool, checked by the arcium program
     pub executing_pool: UncheckedAccount<'info>,
-    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
     #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_EVAL_POLICY))]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-    #[account(mut, address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(mut, address = ARCIUM_FEE_POOL_ACCOUNT_ADDRESS)]
     pub pool_account: Account<'info, FeePool>,
@@ -794,18 +784,18 @@ pub struct CommitExecutedPayment<'info> {
     pub sign_pda_account: Account<'info, ArciumSignerAccount>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
-    #[account(mut, address = derive_mempool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: mempool_account, checked by the arcium program
     pub mempool_account: UncheckedAccount<'info>,
-    #[account(mut, address = derive_execpool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: executing_pool, checked by the arcium program
     pub executing_pool: UncheckedAccount<'info>,
-    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
     #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_COMMIT_SPEND))]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-    #[account(mut, address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(mut, address = ARCIUM_FEE_POOL_ACCOUNT_ADDRESS)]
     pub pool_account: Account<'info, FeePool>,
@@ -835,18 +825,18 @@ pub struct ResetMonthlySpend<'info> {
     pub sign_pda_account: Account<'info, ArciumSignerAccount>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
-    #[account(mut, address = derive_mempool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: mempool_account
     pub mempool_account: UncheckedAccount<'info>,
-    #[account(mut, address = derive_execpool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: executing_pool
     pub executing_pool: UncheckedAccount<'info>,
-    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
     #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_RESET_MONTH))]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-    #[account(mut, address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(mut, address = ARCIUM_FEE_POOL_ACCOUNT_ADDRESS)]
     pub pool_account: Account<'info, FeePool>,
@@ -876,18 +866,18 @@ pub struct UpdatePolicyLimits<'info> {
     pub sign_pda_account: Account<'info, ArciumSignerAccount>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
-    #[account(mut, address = derive_mempool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: mempool_account
     pub mempool_account: UncheckedAccount<'info>,
-    #[account(mut, address = derive_execpool_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: executing_pool
     pub executing_pool: UncheckedAccount<'info>,
-    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet))]
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
     #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_UPDATE_LIMITS))]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-    #[account(mut, address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(mut, address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(mut, address = ARCIUM_FEE_POOL_ACCOUNT_ADDRESS)]
     pub pool_account: Account<'info, FeePool>,
@@ -912,7 +902,7 @@ pub struct InitCompanyPolicyCallback<'info> {
     pub mxe_account: Account<'info, MXEAccount>,
     /// CHECK: computation_account, checked by arcium program via callback constraints.
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -932,7 +922,7 @@ pub struct EvaluatePolicyCallback<'info> {
     pub mxe_account: Account<'info, MXEAccount>,
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -940,9 +930,6 @@ pub struct EvaluatePolicyCallback<'info> {
     /// CHECK: decision_acc
     #[account(mut)]
     pub decision_acc: Account<'info, PolicyDecisionAccount>,
-    /// CHECK: policy_acc
-    #[account(mut)]
-    pub policy_acc: Account<'info, ConfidentialPolicyAccount>,
 }
 
 #[callback_accounts("commit_executed_payment")]
@@ -955,7 +942,7 @@ pub struct CommitExecutedPaymentCallback<'info> {
     pub mxe_account: Account<'info, MXEAccount>,
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -975,7 +962,7 @@ pub struct ResetMonthlySpendCallback<'info> {
     pub mxe_account: Account<'info, MXEAccount>,
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -995,7 +982,7 @@ pub struct UpdatePolicyLimitsCallback<'info> {
     pub mxe_account: Account<'info, MXEAccount>,
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_cluster_pda!(mxe_account, PolicyError::ClusterNotSet))]
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
     pub cluster_account: Account<'info, Cluster>,
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
