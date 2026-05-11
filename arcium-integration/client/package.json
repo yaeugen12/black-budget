@@ -1,0 +1,21 @@
+{
+  "name": "@black-budget/arcium-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Client wrapper around the confidential-policy program (Phase A). Imported by app/ after Arcium SDK is installed.",
+  "main": "src/arcium-client.ts",
+  "types": "src/arcium-client.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arcium-hq/client": "^0.9.6",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.95.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}
