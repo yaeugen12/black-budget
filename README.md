@@ -138,9 +138,20 @@ Privacy in a treasury OS is not one feature — it is a stack. Black Budget sepa
 |------|------------------|-------|--------|
 | **1 — Application** | Cross-audience disclosure (investor / auditor / regulator views of the same root) | Off-chain Merkle redaction + on-chain root anchor | **Live today (commit `64f80dd`, Devnet)** |
 | **2 — Protocol** | On-chain amounts + transfer values | [Arcium Confidential SPL](https://docs.arcium.com) (Q3 2026) — replaces dependency on ZK ElGamal Proof program returning | **Spec'd in [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §5** |
-| **3 — Compute** | Policy evaluation, compliance constraints, Merkle generation — all on encrypted state | [Arcium MXE](https://www.arcium.com/) (Mainnet Alpha since Feb 2026) | **Spec'd in [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §4, §6, §7** |
+| **3 — Compute** | Policy evaluation, compliance constraints, Merkle generation — all on encrypted state | [Arcium MXE](https://www.arcium.com/) (Mainnet Alpha since Feb 2026) | **Phase A code complete on [`feature/arcium-phase-a`](https://github.com/yaeugen12/black-budget/tree/feature/arcium-phase-a)** · spec in [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §4, §6, §7 |
 
 Tier 1 protects against **untrusted external audiences** (an investor seeing what an auditor sees). Tier 2 protects against **public-chain observers** (competitors reading your burn rate from solscan). Tier 3 protects against **a compromised proof generator** — even the company itself cannot produce a fabricated view; the MPC cluster attests to the source data.
+
+### Phase A — Active implementation
+
+Tier 3's first slice (encrypted policy evaluation) is implemented on branch [`feature/arcium-phase-a`](https://github.com/yaeugen12/black-budget/tree/feature/arcium-phase-a):
+
+- 5 [Arcis](https://docs.arcium.com) MPC circuits in [`arcium-integration/encrypted-ixs/src/lib.rs`](https://github.com/yaeugen12/black-budget/blob/feature/arcium-phase-a/arcium-integration/encrypted-ixs/src/lib.rs)
+- Companion Anchor program ([`confidential_policy`](https://github.com/yaeugen12/black-budget/blob/feature/arcium-phase-a/arcium-integration/programs/confidential_policy/src/lib.rs)) with 5 queue_computation entries + 5 `#[arcium_callback]` handlers
+- TypeScript SDK wrapper ([`arcium-integration/client/src/arcium-client.ts`](https://github.com/yaeugen12/black-budget/blob/feature/arcium-phase-a/arcium-integration/client/src/arcium-client.ts))
+- Bring-online runbook in [`BUILD_ARCIUM.md`](https://github.com/yaeugen12/black-budget/blob/feature/arcium-phase-a/BUILD_ARCIUM.md) — ~3-5 days from fresh machine to devnet deploy
+
+The main `black_budget` Anchor program on `main` is **unchanged** by this branch: `arcium-integration/` is a self-contained sub-project with its own `Cargo.toml`, `Anchor.toml`, and `Arcium.toml`. Composition happens at the frontend layer once Phase A is deployed.
 
 > 12-week post-hackathon roadmap to Tier 3 production: see [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §10.
 
