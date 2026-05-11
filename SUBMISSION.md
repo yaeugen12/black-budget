@@ -42,11 +42,16 @@ Private treasury OS for internet-native companies on Solana.
 ### Description (250 words — paste into "What it does")
 Internet-native companies pay contractors in 30+ countries every month. Today they pick between three bad options: traditional banks (slow, no programmability), public blockchains (every payment leaks vendor + amount + cadence to competitors and indexers), or spreadsheets (no enforcement, no audit trail, human error).
 
-Black Budget is a private finance operating system that runs on Solana. Companies upload invoices (PDF/image), Claude Vision extracts structured data, treasury policies evaluate automatically on-chain (auto-approve, dual-approve, monthly burn cap), and payments execute via Token-2022 USDC with confidential transfer extension. The Solana program is 1,500 lines of Anchor, deployed to devnet, with 69+ tests across unit / integration / on-chain suites.
+Black Budget is a private treasury operating system on Solana. Companies upload invoices (PDF/image), Claude Vision extracts structured data, treasury policies evaluate automatically on-chain (auto-approve, dual-approve, monthly burn cap), and payments execute via Token-2022 USDC with confidential transfer extension enabled. The Solana program is 1,500 lines of Anchor, deployed to devnet, with 69+ tests across unit / integration / on-chain suites and 4 audit passes (0 Critical/High open).
 
-The core innovation is **selective disclosure**: the same Merkle root supports three views — investor (sees runway and burn rate, not individual payments), auditor (sees pseudonymized amounts), regulator (sees everything). All views verifiably derived from the same on-chain dataset. Compliance proofs answer parametric queries ("is runway > 6 months?", "is admin spend < 30%?") without revealing underlying data. Each proof is anchored on-chain with constraint hash for independent verification.
+The core innovation is **three-tier privacy**:
+- **Tier 1 — Selective disclosure (live today)**: same Merkle root, three views — investor sees runway + burn rate, auditor sees pseudonymized amounts, regulator sees everything. All anchored on-chain.
+- **Tier 2 — Confidential SPL (Q3 2026)**: on-chain amounts go encrypted via Arcium's Confidential SPL token standard.
+- **Tier 3 — Encrypted compute (Q4 2026)**: policy evaluation, compliance proofs, and Merkle generation execute inside Arcium MXEs (MPC clusters). Plaintext payment data never leaves trusted enclaves.
 
-Built in 6 weeks. 4 audit passes. Zero open Critical or High findings. Live demo runs end-to-end on devnet from invoice upload through on-chain payment to verifiable proof export.
+Compliance proofs answer parametric queries ("is runway > 6 months?", "is admin spend < 30%?") without revealing underlying data. Each proof is anchored on-chain with constraint hash for independent verification.
+
+Built in 6 weeks. Live end-to-end demo on devnet. Full integration spec for Arcium roadmap in repo (`ARCIUM_INTEGRATION.md` — 12-week implementation milestones).
 
 ### Tech stack
 Solana program (Anchor 0.30.1, Rust), Token-2022 with Confidential Transfer extension, Next.js 16, Claude Vision API, Supabase (PostgreSQL), Solana Wallet Adapter, @coral-xyz/anchor.
@@ -65,7 +70,7 @@ Consumer / DeFi / Infrastructure → **pick one based on Colosseum's actual trac
 
 ## 3. Pitch deck — slide-by-slide
 
-> Build in Pitch, Figma, or Google Slides. 16:9. Dark theme (#0A0A0A bg, #FAFAFA text, white redaction blocks). One idea per slide.
+> Build in Pitch, Figma, or Google Slides. 16:9. Dark theme (#0A0A0A bg, #FAFAFA text, white redaction blocks). One idea per slide. **13 slides total.**
 
 ### Slide 1 — Title
 - **BLACK BUDGET** logo (large)
@@ -133,13 +138,22 @@ Two-column compare table — see Section 5 below.
 - **Top of funnel**: Solana ecosystem newsletters, Superteam DAOs, Colosseum cohort, Founder Twitter
 - **First 10 customers**: hand-onboard. Free for hackathon-period users.
 
-### Slide 11 — Roadmap
-- **Q3 2026**: Mainnet launch + ZK ElGamal encrypted amounts when re-enabled (zero code change)
-- **Q4 2026**: Squads multisig integration (use Squads vaults as Black Budget company vaults)
-- **Q1 2027**: Multi-asset support (SOL, SOL-LSTs, USDT), runway-based discretionary spend gates
-- **2027**: Off-chain payroll partners (Deel-style fiat off-ramp from vault), tax export
+### Slide 11 — Privacy Roadmap (the 3-tier story)
+Show the three tiers as a stack with `Live` / `Q3 2026` / `Q4 2026` badges:
 
-### Slide 12 — Team & ask
+- **Tier 1 — Application (Live today)**: Selective disclosure. Investor / auditor / regulator views from one Merkle root. Anchored on-chain.
+- **Tier 2 — Protocol (Q3 2026, Arcium CSPL)**: Confidential SPL token replaces Token-2022 USDC. **Encrypted on-chain balances + transfers**. No bridge, no L2 — native Solana.
+- **Tier 3 — Compute (Q4 2026, Arcium MXE)**: Policy evaluation, compliance constraints, Merkle generation **all execute on encrypted state inside MPC**. Plaintext never leaves trusted clusters.
+
+Bottom line: "Same Solana program. Three composable privacy upgrades. Each shipped independently. Detailed spec in repo → `ARCIUM_INTEGRATION.md` (50 pages, 12 implementation milestones)."
+
+### Slide 12 — Wider Roadmap
+- **Q3 2026**: Mainnet launch + Tier 2 (Confidential SPL via Arcium)
+- **Q4 2026**: Tier 3 (encrypted policy + compliance in Arcium MXE) + Squads multisig integration (use Squads vaults as Black Budget company authority)
+- **Q1 2027**: Multi-asset support (SOL, SOL-LSTs, USDT-CSPL), runway-based discretionary spend gates, Light Protocol stealth addresses
+- **2027**: Off-chain payroll partners (Deel-style fiat off-ramp from vault), tax export, ERP integrations (Quickbooks/Xero)
+
+### Slide 13 — Team & ask
 - Team: your details
 - Ask: $X seed for 12-month runway to mainnet launch + first 50 customers
 - Or: looking for design partner (Solana-native startup with $100k+ monthly burn)
@@ -343,15 +357,15 @@ This is shipping, not a slide:
 Try it: black-budget.vercel.app
 ```
 
-### Tweet 7 (Solana-native)
+### Tweet 7 (Solana-native + Arcium roadmap)
 ```
-Why Solana specifically?
+Why Solana? Privacy is a stack, not a feature.
 
-Token-2022 has Confidential Transfer extension — encrypted amounts at the SPL level. No L2, no rollup, no bridge.
+🔓 Today: selective disclosure (Merkle root, 3-tier views)
+🔒 Q3 2026: encrypted balances via @ArciumHQ Confidential SPL
+🔐 Q4 2026: encrypted policy eval + compliance proofs in Arcium MXE
 
-When ZK ElGamal Proof program returns to mainnet, Black Budget transfers become encrypted with ZERO code change.
-
-Solana-first by design.
+Same chain. Same vault. Three composable upgrades.
 ```
 
 ### Tweet 8 (CTA + Colosseum)

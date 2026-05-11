@@ -12,7 +12,8 @@
 <p align="center">
   <a href="https://colosseum.com/frontier">Solana Frontier Hackathon 2026</a> &nbsp;·&nbsp;
   <a href="./SUBMISSION.md">Submission kit</a> &nbsp;·&nbsp;
-  <a href="./AUDIT_FINDINGS_RESOLVED.md">Audit status</a>
+  <a href="./AUDIT_FINDINGS_RESOLVED.md">Audit status</a> &nbsp;·&nbsp;
+  <a href="./ARCIUM_INTEGRATION.md">Arcium integration spec</a>
 </p>
 
 <p align="center">
@@ -126,6 +127,22 @@ Black Budget is a **private back-office** that runs on Solana:
               │  invoices │ vendors │ proof_records                │
               └───────────────────────────────────────────────────┘
 ```
+
+---
+
+## Privacy Architecture (Three Tiers)
+
+Privacy in a treasury OS is not one feature — it is a stack. Black Budget separates the layers so each ships when its dependency is ready, and each composes additively on top of the previous one.
+
+| Tier | What it protects | Stack | Status |
+|------|------------------|-------|--------|
+| **1 — Application** | Cross-audience disclosure (investor / auditor / regulator views of the same root) | Off-chain Merkle redaction + on-chain root anchor | **Live today (commit `64f80dd`, Devnet)** |
+| **2 — Protocol** | On-chain amounts + transfer values | [Arcium Confidential SPL](https://docs.arcium.com) (Q3 2026) — replaces dependency on ZK ElGamal Proof program returning | **Spec'd in [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §5** |
+| **3 — Compute** | Policy evaluation, compliance constraints, Merkle generation — all on encrypted state | [Arcium MXE](https://www.arcium.com/) (Mainnet Alpha since Feb 2026) | **Spec'd in [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §4, §6, §7** |
+
+Tier 1 protects against **untrusted external audiences** (an investor seeing what an auditor sees). Tier 2 protects against **public-chain observers** (competitors reading your burn rate from solscan). Tier 3 protects against **a compromised proof generator** — even the company itself cannot produce a fabricated view; the MPC cluster attests to the source data.
+
+> 12-week post-hackathon roadmap to Tier 3 production: see [`ARCIUM_INTEGRATION.md`](./ARCIUM_INTEGRATION.md) §10.
 
 ---
 
