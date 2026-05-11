@@ -48,15 +48,31 @@
 4. ✅ Same Arcis DSL patterns as the working voting example
 5. ✅ ArgBuilder calls match field count of the Arcis structs
 
-**Plausible root causes** (not yet confirmed):
-1. **Computation fee underfunded** — Arcium charges per-computation fees from the MXE's fee pool. Our MXE may not have deposited any $ARC equivalent during init. Need to check `arcium computation 456 <offset>` for explicit error data.
-2. **Cluster doesn't have our circuit's bytecode cached locally** — `OnchainFinalized` is the on-chain state but cluster nodes may need to fetch + verify the binaries before running. New circuits may have a propagation delay.
-3. **Cluster 456 health** — devnet cluster operators are volunteers. A subset may be offline, leading to abort signals when quorum can't be reached.
+**Diagnostic complete — root cause isolated**:
 
-**Concrete next debugging steps** (require 2+ more SOL):
-1. `arcium test-cluster --cluster-offset 456 --keypair-path ~/.config/solana/id.json --rpc-url <devnet>` — runs Arcium's own smoke test deploying a known-good MXE. Costs ~2 SOL. If it passes, cluster is healthy → our config has a subtle bug. If it fails → cluster issue, not ours.
-2. Decode the `Program data:` log entries from the abort callback tx using the Arcium event IDL (`Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ`). The second `Program data` line contains the abort reason in the event payload.
-3. Ask in Arcium Discord `#dev-help` channel for cluster-456 status + abort interpretation.
+By decoding the `finalizeComputationEvent` (Arcium event discriminator `1b4b75dd…`) emitted before each failing callback, the cluster's verdict is:
+
+```
+executionStatus = failure
+executionFailure variant = circuit  (variant 2 of 11)
+32-byte payload = 0x3193fd6832667c87903a5f17165430923bf58b8990731755b9b5066f508ba618
+```
+
+**Translation**: the MPC cluster received the queue, loaded our compiled `.arcis` circuit, *attempted to execute it*, and the circuit itself raised a runtime error. Not a router/protocol/abort issue — the actual Arcis bytecode panicked. The 32-byte payload is likely the trace hash.
+
+**Independently verified**: Cluster 456 is healthy. Other MXEs on the same cluster (`AggregateBidsV2`, `RegisterUserForAnonymousUsageV11`) have **successful** `CallbackComputation` transactions in the same block range — see e.g. `5AxD9TQnpKdF7Lbp6SRzbxAfM7cZT5RBpByNX6w6txDU3TBB5qcwFDwE1VaP7ZcDGhCmKXLWXRYF3AX1LX8htfpy`. So the cluster itself works; only our circuit fails.
+
+**Most likely cause** in our circuit:
+1. `pub` modifier on struct fields. Voting example struct (`VoteStats`) has private fields; ours has `pub auto_approve_limit: u64` etc. Arcis macros may not handle `pub` correctly.
+2. The 4-field `CompanyPolicy` struct may exceed an internal limit on encrypted-input cardinality. Voting's `VoteStats` is 2 fields.
+3. Reading `Enc<Shared, T>` in `init_company_policy` and immediately re-encrypting under `Mxe` may have a special-case bug in Arcis 0.9.6 — voting's `init_vote_stats()` takes no input.
+
+**Concrete next debugging steps**:
+1. Remove `pub` from all struct fields in `encrypted-ixs/src/lib.rs`, rebuild, redeploy.
+2. Replace `init_company_policy(initial_policy_ctxt: Enc<Shared, CompanyPolicy>)` with `init_company_policy()` (no input) that returns a zero-default policy. Then use `update_policy_limits` (already in the circuit set) to set the real values via a follow-up call.
+3. If above don't fix: open an issue in the Arcium Discord `#dev-help` channel with the 32-byte trace hash above; their team can map it to a specific failure mode.
+
+**Cost to iterate**: each circuit redeploy requires `arcium build` + new `init_X_comp_def` for any modified circuits (~1-2 SOL each), plus a fresh program deploy if behavior change affects the Anchor program. Budget ~5 SOL per iteration cycle.
 
 ## File deltas vs main
 
