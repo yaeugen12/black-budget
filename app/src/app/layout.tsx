@@ -20,7 +20,7 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`} suppressHydrationWarning>
       <body className="min-h-full bg-background text-foreground">
         <Providers>
-          <div className="flex h-screen overflow-hidden">
+          <div className="flex h-dvh min-h-screen overflow-hidden">
             <AppShell>{children}</AppShell>
           </div>
           <Toaster

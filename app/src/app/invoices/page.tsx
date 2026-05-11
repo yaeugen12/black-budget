@@ -15,7 +15,6 @@ import {
   History,
   Shield,
   CalendarClock,
-  Workflow,
 } from "lucide-react";
 import { getInvoicesSync, getVendors, saveInvoice, isNewVendor, type StoredInvoice } from "@/lib/invoice-store";
 import { useCompany } from "@/lib/company-context";
@@ -220,8 +219,9 @@ export default function InvoicesPage() {
       await createPayment(recipientWallet, parsed.amount, parsed.category || "vendor", `Invoice: ${parsed.vendor}`);
       setPaymentCreated(true);
       toast.success("Payment created on-chain!");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to create payment");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to create payment";
+      toast.error(message);
     } finally {
       setCreatingPayment(false);
     }
@@ -242,71 +242,26 @@ export default function InvoicesPage() {
 
   return (
     <div className="page-shell mx-auto max-w-6xl space-y-6 animate-in">
-      <section className="hero-surface px-6 py-7 lg:px-8 lg:py-8">
-        <div className="relative z-10 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="card px-6 py-6 lg:px-7">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="eyebrow">
-              <Workflow className="h-3.5 w-3.5" />
-              Invoice intake
-            </div>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight lg:text-4xl">
-              Parse the document once, then make the treasury path obvious.
-            </h1>
-            <p className="mt-4 max-w-2xl text-[15px] leading-7 text-muted-foreground">
-              This surface captures invoices, extracts the finance data, and records the approval route.
-              The UI now says exactly what happens next instead of pretending execution already happened.
+            <p className="eyebrow">Invoice intake</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl">Upload an invoice</h1>
+            <p className="mt-3 max-w-2xl text-[14px] leading-6 text-muted-foreground">
+              We extract the important fields and show whether the invoice should go to Payments or Approvals before anything is saved.
             </p>
-
-            <div className="mt-7 grid gap-3 sm:grid-cols-3">
-              <div className="metric-tile">
-                <p className="text-label mb-2">Invoices Logged</p>
-                <div className="stat-value">{invoiceHistory.length}</div>
-                <p className="mt-2 text-[12px] text-muted-foreground">Stored across local intake history.</p>
-              </div>
-              <div className="metric-tile">
-                <p className="text-label mb-2">Known Vendors</p>
-                <div className="stat-value">{vendorCount}</div>
-                <p className="mt-2 text-[12px] text-muted-foreground">Useful for review and vendor verification.</p>
-              </div>
-              <div className="metric-tile">
-                <p className="text-label mb-2">Tracked Volume</p>
-                <div className="stat-value">{formatCurrency(totalVolume)}</div>
-                <p className="mt-2 text-[12px] text-muted-foreground">Visible from intake records only.</p>
-              </div>
-            </div>
           </div>
 
-          <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-label mb-1">What this page does</p>
-                <h2 className="section-title">A cleaner bridge from document to treasury action</h2>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
-                <Shield className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {[
-                "AI extracts vendor, amount, category, and line items from the uploaded file.",
-                "Policy routing decides whether the invoice is payment-ready, review-only, or blocked.",
-                "The result is saved as an intake record so the next step in Payments or Approvals is explicit.",
-              ].map((step, index) => (
-                <div key={step} className="flex items-start gap-3 rounded-2xl border border-border bg-secondary/45 px-4 py-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold">
-                    {index + 1}
-                  </div>
-                  <p className="text-[13px] leading-6 text-muted-foreground">{step}</p>
-                </div>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="badge badge-neutral">{invoiceHistory.length} logged</span>
+            <span className="badge badge-neutral">{vendorCount} vendors</span>
+            <span className="badge badge-info">{formatCurrency(totalVolume)} tracked</span>
           </div>
         </div>
       </section>
 
       {!file && (
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        <>
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -331,41 +286,31 @@ export default function InvoicesPage() {
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10">
                 <Upload className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="mt-5 text-2xl font-semibold tracking-tight">Drop an invoice or browse from your desktop</h2>
+              <h2 className="mt-5 text-2xl font-semibold tracking-tight">Drop an invoice or browse</h2>
               <p className="mt-3 text-[14px] leading-6 text-muted-foreground">
-                PDF, PNG, or JPEG. We extract the finance data, score risk signals, and show the policy route before anything gets saved.
+                PDF, PNG, or JPEG. Nothing is saved until you review the result and confirm.
               </p>
-              <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-4 py-2 text-[12px] text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                AI-assisted parsing with deterministic policy copy
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[12px] text-muted-foreground">
+                <span className="rounded-full border border-border bg-secondary/60 px-3 py-1.5">Review before save</span>
+                <span className="rounded-full border border-border bg-secondary/60 px-3 py-1.5">Policy route shown first</span>
+                <span className="rounded-full border border-border bg-secondary/60 px-3 py-1.5">On-chain payment happens later</span>
               </div>
             </div>
           </div>
 
-          <div className="card p-6">
-            <p className="text-label mb-3">Operator Notes</p>
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-border bg-secondary/45 p-4">
-                <p className="section-title">Good demo file choices</p>
-                <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
-                  Contractor invoices, SaaS renewals, and marketing retainers make the policy output easy to understand during a live demo.
-                </p>
+          <div className="card px-5 py-4">
+            <div className="flex flex-col gap-3 text-[13px] text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Upload, review the extracted fields, then save the intake.
               </div>
-              <div className="rounded-2xl border border-border bg-secondary/45 p-4">
-                <p className="section-title">Most useful outcome</p>
-                <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
-                  The strongest moment here is seeing the invoice become either payment-ready or approval-routed with a clear reason.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-secondary/45 p-4">
-                <p className="section-title">Current scope</p>
-                <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
-                  This page stores the intake decision. The actual on-chain payment and signatures still happen in the treasury pages.
-                </p>
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                Payments and signatures still continue in the treasury pages.
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {parsing && (
@@ -414,7 +359,7 @@ export default function InvoicesPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-label mb-1">Extracted Data</p>
-                  <h3 className="section-title">What the model pulled from the document</h3>
+                  <h3 className="section-title">Invoice details</h3>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
                   <Sparkles className="h-5 w-5 text-primary" />
@@ -507,7 +452,7 @@ export default function InvoicesPage() {
 
                 <div className="mt-5 grid gap-3">
                   <div className="metric-tile">
-                    <p className="text-label mb-1">Recorded Outcome</p>
+                    <p className="text-label mb-1">Save as</p>
                     <p className="section-title">
                       {policyResult.action === "auto_approve"
                         ? "Save as payment-ready intake"
@@ -517,19 +462,16 @@ export default function InvoicesPage() {
                     </p>
                   </div>
                   <div className="metric-tile">
-                    <p className="text-label mb-1">Next Surface</p>
+                    <p className="text-label mb-1">Next page</p>
                     <p className="section-title">
                       {policyResult.action === "auto_approve" ? "Payments" : policyResult.action === "block" ? "Review invoice details" : "Approvals"}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-border bg-secondary/40 p-4">
-                  <p className="text-[13px] font-medium">What happens after save</p>
-                  <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
-                    We store the parsed invoice and its policy decision. On-chain payment creation and signature collection still happen in the treasury workflow.
-                  </p>
-                </div>
+                <p className="mt-5 text-[13px] leading-6 text-muted-foreground">
+                  Saving records the intake decision. Payment creation and signer collection continue later in the treasury workflow.
+                </p>
 
                 {policyResult.action !== "block" ? (
                   <button

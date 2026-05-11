@@ -23,7 +23,7 @@ const defaultPayroll: PayrollEntry[] = [
 ];
 
 export default function PayrollPage() {
-  const { company, createPayment, vaultBalance } = useCompany();
+  const { createPayment, vaultBalance } = useCompany();
   const [entries, setEntries] = useState<PayrollEntry[]>(defaultPayroll);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<{ id: string; status: "success" | "error"; tx?: string; error?: string }[]>([]);
@@ -67,8 +67,9 @@ export default function PayrollPage() {
           `Payroll: ${entry.label}`
         );
         newResults.push({ id: entry.id, status: "success", tx });
-      } catch (e: any) {
-        newResults.push({ id: entry.id, status: "error", error: e.message?.slice(0, 80) });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Payment creation failed";
+        newResults.push({ id: entry.id, status: "error", error: message.slice(0, 80) });
       }
       setResults([...newResults]);
     }

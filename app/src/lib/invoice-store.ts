@@ -16,12 +16,31 @@ export interface StoredInvoice {
   policyAction: string;
   policyReason: string;
   createdAt: string;
-  status: "parsed" | "submitted" | "paid";
+  status: "parsed" | "review" | "ready" | "submitted" | "paid";
   paymentTx?: string;
   walletAddress?: string;
 }
 
 const STORAGE_KEY = "black-budget-invoices";
+
+interface InvoiceRow {
+  id: string;
+  file_name: string;
+  vendor: string;
+  amount: number;
+  currency: string;
+  due_date: string;
+  category: string;
+  line_items: { description: string; amount: number }[];
+  risk_flags: string[];
+  confidence: number;
+  policy_action: string;
+  policy_reason: string;
+  created_at: string;
+  status: StoredInvoice["status"];
+  payment_tx?: string;
+  wallet_address?: string;
+}
 
 // ─── LocalStorage fallback ──────────────────────────────────────────
 
@@ -65,7 +84,7 @@ async function getSupabaseInvoices(walletAddress?: string): Promise<StoredInvoic
     }
     const { data, error } = await query;
     if (error) throw error;
-    return (data || []).map((row: any) => ({
+    return ((data || []) as InvoiceRow[]).map((row) => ({
       id: row.id,
       fileName: row.file_name,
       vendor: row.vendor,
@@ -118,7 +137,7 @@ async function saveSupabaseInvoice(invoice: StoredInvoice): Promise<void> {
 async function updateSupabaseStatus(id: string, status: StoredInvoice["status"], paymentTx?: string): Promise<void> {
   if (!supabase) return;
   try {
-    const update: any = { status };
+    const update: { status: StoredInvoice["status"]; payment_tx?: string } = { status };
     if (paymentTx) update.payment_tx = paymentTx;
     await supabase.from("invoices").update(update).eq("id", id);
   } catch (e) {

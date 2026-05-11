@@ -9,3 +9,16 @@ target/
 .anchor/
 test-ledger/
 tests/wallet-approver.json
+wallets/
+*.keypair.json
+
+# Local research and scratch files
+scratchpad/
+AUDIT_FINDINGS.md
+agent_depth_token_flow_findings.md
+
+# Local Supabase state
+supabase/.temp/
+
+# Symlinked test dependencies
+tests/node_modules

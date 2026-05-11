@@ -11,6 +11,10 @@ const MODELS = [
   "claude-3-haiku-20240307",
 ];
 
+function isAnthropicError(error: unknown): error is { status?: number; message?: string } {
+  return typeof error === "object" && error !== null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -47,12 +51,12 @@ export async function POST(request: NextRequest) {
         });
         // Successfully parsed with this model
         break;
-      } catch (e: any) {
-        if (e.status === 404 || e.message?.includes("not_found")) {
+      } catch (error: unknown) {
+        if (isAnthropicError(error) && (error.status === 404 || error.message?.includes("not_found"))) {
           // Model not available, try next
           continue;
         }
-        throw e;
+        throw error;
       }
     }
 

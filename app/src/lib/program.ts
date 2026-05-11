@@ -1,12 +1,98 @@
-// @ts-nocheck — Types will be auto-generated when anchor IDL build works with stable Rust
-import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { Program, AnchorProvider, BN, type Idl } from "@coral-xyz/anchor";
+import { useConnection, useWallet, type WalletContextState } from "@solana/wallet-adapter-react";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { useMemo } from "react";
 import { IDL, PROGRAM_ID } from "./idl";
 
 const programId = new PublicKey(PROGRAM_ID);
+
+type EmptyValue = Record<string, never>;
+
+type RoleValue =
+  | { owner: EmptyValue }
+  | { approver: EmptyValue }
+  | { viewer: EmptyValue }
+  | { contractor: EmptyValue };
+
+type PaymentCategoryValue =
+  {
+    payroll?: EmptyValue;
+    vendor?: EmptyValue;
+    subscription?: EmptyValue;
+    contractor?: EmptyValue;
+    reimbursement?: EmptyValue;
+    other?: EmptyValue;
+  };
+
+type ProviderWallet = Pick<WalletContextState, "publicKey" | "signTransaction" | "signAllTransactions"> & {
+  publicKey: PublicKey;
+  signTransaction: NonNullable<WalletContextState["signTransaction"]>;
+  signAllTransactions: NonNullable<WalletContextState["signAllTransactions"]>;
+};
+
+type ProgramAccountsInput = Record<string, PublicKey>;
+
+interface RpcBuilder {
+  accounts(accounts: ProgramAccountsInput): {
+    rpc(): Promise<string>;
+  };
+}
+
+interface CompanyAccount {
+  paymentNonce: BN;
+}
+
+interface PaymentRequestAccount {
+  company: PublicKey;
+  requester: PublicKey;
+  recipient: PublicKey;
+  amount: BN;
+  category: PaymentCategoryValue;
+  memo: string;
+  paymentId: BN;
+  requiredApprovals: number;
+  approvals: PublicKey[];
+  riskScore: number;
+  createdAt: BN;
+  status: Record<string, EmptyValue>;
+}
+
+interface ProgramPayment {
+  publicKey: PublicKey;
+  account: PaymentRequestAccount;
+}
+
+type BlackBudgetProgram = Program & {
+  methods: {
+    initializeCompany(name: string): RpcBuilder;
+    addMember(role: RoleValue, label: string): RpcBuilder;
+    setPolicies(policy: {
+      autoApproveLimit: BN;
+      dualApproveThreshold: BN;
+      monthlyBurnCap: BN;
+      requireVendorVerification: boolean;
+      restrictToKnownRecipients: boolean;
+      minRunwayMonths: number;
+    }): RpcBuilder;
+    createPayment(
+      amount: BN,
+      category: PaymentCategoryValue,
+      descriptionHash: number[],
+      memo: string,
+      riskScore: number
+    ): RpcBuilder;
+    approvePayment(): RpcBuilder;
+  };
+  account: {
+    company: {
+      fetch(address: PublicKey): Promise<CompanyAccount>;
+    };
+    paymentRequest: {
+      all(filters: Array<{ memcmp: { offset: number; bytes: string } }>): Promise<ProgramPayment[]>;
+    };
+  };
+};
 
 // ─── PDA Derivations ────────────────────────────────────────────────
 
@@ -52,16 +138,16 @@ export function useBlackBudget() {
   const { connection } = useConnection();
   const wallet = useWallet();
 
-  const program = useMemo(() => {
-    if (!wallet.publicKey || !wallet.signTransaction) return null;
+  const program = useMemo((): BlackBudgetProgram | null => {
+    if (!wallet.publicKey || !wallet.signTransaction || !wallet.signAllTransactions) return null;
 
     const provider = new AnchorProvider(
       connection,
-      wallet as never,
+      wallet as ProviderWallet,
       { commitment: "confirmed" }
     );
 
-    return new Program(IDL as any, provider);
+    return new Program(IDL as unknown as Idl, provider) as unknown as BlackBudgetProgram;
   }, [connection, wallet]);
 
   // ─── Initialize Company ─────────────────────────────────────────
@@ -93,7 +179,7 @@ export function useBlackBudget() {
 
   async function addMember(
     newMemberWallet: PublicKey,
-    role: { owner: {} } | { approver: {} } | { viewer: {} } | { contractor: {} },
+    role: RoleValue,
     label: string
   ) {
     if (!program || !wallet.publicKey) throw new Error("Wallet not connected");
@@ -149,7 +235,7 @@ export function useBlackBudget() {
   async function createPayment(
     recipient: PublicKey,
     amount: number, // in USDC (human readable)
-    category: { payroll: {} } | { vendor: {} } | { subscription: {} } | { contractor: {} } | { reimbursement: {} } | { other: {} },
+    category: PaymentCategoryValue,
     descriptionHash: number[],
     memo: string,
     riskScore: number
@@ -160,7 +246,7 @@ export function useBlackBudget() {
     const [requesterMemberPDA] = getMemberPDA(companyPDA, wallet.publicKey);
 
     // Fetch company to get nonce
-    const company = await program.account.company.fetch(companyPDA);
+    const company = await program.account.company.fetch(companyPDA) as CompanyAccount;
     const nonce = company.paymentNonce.toNumber();
     const [paymentPDA] = getPaymentPDA(companyPDA, nonce);
 
@@ -210,7 +296,7 @@ export function useBlackBudget() {
 
     const [companyPDA] = getCompanyPDA(wallet.publicKey);
     try {
-      return await program.account.company.fetch(companyPDA);
+      return await program.account.company.fetch(companyPDA) as CompanyAccount;
     } catch {
       return null; // Company doesn't exist yet
     }
@@ -224,7 +310,7 @@ export function useBlackBudget() {
     const [companyPDA] = getCompanyPDA(companyAuthority);
     return await program.account.paymentRequest.all([
       { memcmp: { offset: 8, bytes: companyPDA.toBase58() } },
-    ]);
+    ]) as ProgramPayment[];
   }
 
   return {

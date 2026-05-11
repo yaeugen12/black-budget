@@ -19,7 +19,6 @@ import {
   type ComplianceDataset,
   COMPLIANCE_TEMPLATES,
   evaluateCompliance,
-  computeConstraintHash,
 } from "@/lib/compliance";
 import {
   Shield,
@@ -88,6 +87,10 @@ function buildConstraint(kind: Constraint["kind"], operator: Operator, value: nu
     case "vendor_concentration": return { kind, operator, percent: value };
     case "payment_count": return { kind, operator, count: value };
   }
+}
+
+function getConstraintCategory(constraint: Constraint): string {
+  return constraint.kind === "category_cap" ? constraint.category : "";
 }
 
 export default function ComplianceProofsPage() {
@@ -253,7 +256,7 @@ export default function ComplianceProofsPage() {
         return buildConstraint(c.kind, value as Operator, getConstraintValue(c));
       }
       if (field === "value") {
-        return buildConstraint(c.kind, c.operator, Number(value), c.kind === "category_cap" ? (c as any).category : undefined);
+        return buildConstraint(c.kind, c.operator, Number(value), getConstraintCategory(c) || undefined);
       }
       if (field === "category") {
         return buildConstraint(c.kind, c.operator, getConstraintValue(c), value as string);
@@ -396,7 +399,7 @@ export default function ComplianceProofsPage() {
                     {c.kind === "category_cap" && (
                       <input
                         type="text"
-                        value={(c as any).category || ""}
+                        value={getConstraintCategory(c)}
                         onChange={(e) => updateConstraint(i, "category", e.target.value)}
                         placeholder="category"
                         className="input text-[13px] py-1.5 px-2 max-w-[120px]"

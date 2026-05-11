@@ -56,7 +56,7 @@ describe("IDL Integrity", () => {
   });
 
   it("every defined type reference resolves to a type definition", () => {
-    const typeNames = new Set(IDL.types.map((t) => t.name));
+    const typeNames = new Set<string>(IDL.types.map((t) => t.name));
 
     function checkDefined(obj: unknown, path: string) {
       if (obj && typeof obj === "object") {

@@ -1,13 +1,29 @@
-// @ts-nocheck
 "use client";
 
 import { useState } from "react";
 import { useCompany } from "@/lib/company-context";
-import { CheckCircle2, XCircle, AlertTriangle, User, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  User,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  ExternalLink,
+} from "lucide-react";
 
-function truncatePubkey(key: string): string {
+function truncatePubkey(key: string) {
   if (key.length <= 10) return key;
   return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 export default function ApprovalsPage() {
@@ -15,24 +31,39 @@ export default function ApprovalsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [processing, setProcessing] = useState<Record<string, "approving" | "rejecting" | "executing">>({});
 
-  // Filter to pending and approved payments
-  const actionablePayments = payments.filter((p) => {
-    const status = Object.keys(p.account.status)[0].toLowerCase();
+  const actionablePayments = payments.filter((payment) => {
+    const status = Object.keys(payment.account.status)[0].toLowerCase();
     return status === "pending" || status === "approved";
   });
+  const paymentsNeedingApproval = actionablePayments.filter(
+    (payment) => Object.keys(payment.account.status)[0].toLowerCase() === "pending"
+  );
+  const paymentsReadyToExecute = actionablePayments.filter(
+    (payment) => Object.keys(payment.account.status)[0].toLowerCase() === "approved"
+  );
+
+  const awaitingSigners = paymentsNeedingApproval.length;
+  const readyToExecute = paymentsReadyToExecute.length;
+  const queueValue = actionablePayments.reduce(
+    (sum, payment) => sum + payment.account.amount.toNumber() / 1_000_000,
+    0
+  );
+
+  const clearProcessing = (key: string) => {
+    setProcessing((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const handleApprove = async (paymentId: number, key: string) => {
     setProcessing((prev) => ({ ...prev, [key]: "approving" }));
     try {
       await approvePayment(paymentId);
-    } catch (e) {
-      // toast already handled in context
+      await refresh();
     } finally {
-      setProcessing((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      clearProcessing(key);
     }
   };
 
@@ -40,14 +71,9 @@ export default function ApprovalsPage() {
     setProcessing((prev) => ({ ...prev, [key]: "rejecting" }));
     try {
       await rejectPayment(paymentId);
-    } catch (e) {
-      // toast already handled in context
+      await refresh();
     } finally {
-      setProcessing((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      clearProcessing(key);
     }
   };
 
@@ -56,180 +82,279 @@ export default function ApprovalsPage() {
     try {
       await executePayment(paymentId, recipientPubkey);
       await refresh();
-    } catch (e) {
-      // toast already handled in context
     } finally {
-      setProcessing((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      clearProcessing(key);
     }
+  };
+
+  const renderPaymentCard = (payment: (typeof actionablePayments)[number]) => {
+    const account = payment.account;
+    const key = payment.publicKey.toBase58();
+    const paymentId = account.paymentId.toNumber();
+    const displayId = `BB-${String(paymentId + 1).padStart(3, "0")}`;
+    const amount = account.amount.toNumber() / 1_000_000;
+    const category = Object.keys(account.category)[0];
+    const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1);
+    const riskScore = account.riskScore;
+    const memo = account.memo;
+    const requester = truncatePubkey(account.requester.toBase58());
+    const approvals = account.approvals || [];
+    const requiredApprovals = account.requiredApprovals;
+    const createdAt = new Date(account.createdAt.toNumber() * 1000).toLocaleDateString();
+    const isProcessing = processing[key];
+    const status = Object.keys(account.status)[0].toLowerCase();
+    const recipientPubkey = account.recipient.toBase58();
+    const progress = requiredApprovals > 0 ? (approvals.length / requiredApprovals) * 100 : 100;
+
+    return (
+      <div key={key} className="card overflow-hidden">
+        <div
+          className="flex cursor-pointer flex-col gap-5 px-5 py-5 transition-colors hover:bg-[rgba(255,255,255,0.015)] lg:flex-row lg:items-start lg:justify-between"
+          onClick={() => setExpanded(expanded === key ? null : key)}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="badge badge-neutral text-mono">{displayId}</span>
+              <span className={`badge ${status === "approved" ? "badge-success" : "badge-warning"}`}>
+                {status === "approved" ? "Approved" : "Pending"}
+              </span>
+              <span className="badge badge-neutral">{categoryLabel}</span>
+              {riskScore > 30 && <span className="badge badge-warning">Risk {riskScore}/100</span>}
+            </div>
+
+            <div className="mt-4">
+              <p className="section-title">Transfer to {truncatePubkey(account.recipient.toBase58())}</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Requested by {requester} on {createdAt}
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="metric-tile">
+                <p className="text-label mb-1">Amount</p>
+                <p className="section-title text-primary">{formatCurrency(amount)}</p>
+              </div>
+              <div className="metric-tile">
+                <p className="text-label mb-1">Approvals</p>
+                <p className="section-title">
+                  {approvals.length}/{requiredApprovals}
+                </p>
+              </div>
+              <div className="metric-tile">
+                <p className="text-label mb-1">Risk Score</p>
+                <p className="section-title">{riskScore}/100</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 lg:pl-4">
+            <div className="text-right">
+              <p className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">Progress</p>
+              <p className="mt-1 text-[13px] font-medium text-foreground">
+                {status === "approved" ? "Ready to execute" : "Waiting on signers"}
+              </p>
+            </div>
+            {expanded === key ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </div>
+        </div>
+
+        {expanded === key && (
+          <div className="border-t border-border bg-[rgba(255,255,255,0.015)] px-5 py-5">
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border bg-secondary/40 px-4 py-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-[13px] font-medium">Approval progress</p>
+                    <p className="text-[12px] text-muted-foreground">
+                      {approvals.length}/{requiredApprovals} complete
+                    </p>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className={`h-full rounded-full ${status === "approved" ? "bg-success" : "bg-warning"}`}
+                      style={{ width: `${Math.min(progress, 100)}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {Array.from({ length: requiredApprovals }).map((_, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] ${
+                          index < approvals.length ? "badge-success" : "bg-secondary text-muted-foreground"
+                        }`}
+                      >
+                        <User className="h-3.5 w-3.5" />
+                        {index < approvals.length ? (
+                          <span>Approved by {truncatePubkey(approvals[index].toBase58())}</span>
+                        ) : (
+                          <span>Waiting for signer {index + 1}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-secondary/40 px-4 py-4">
+                  <p className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">Memo</p>
+                  <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
+                    {memo || "No memo attached to this payment request."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  <div className="metric-tile">
+                    <p className="text-label mb-1">Recipient</p>
+                    <p className="section-title font-mono text-[13px] break-all">{recipientPubkey}</p>
+                  </div>
+                  <div className="metric-tile">
+                    <p className="text-label mb-1">Requester</p>
+                    <p className="section-title font-mono text-[13px]">{requester}</p>
+                  </div>
+                </div>
+
+                {isProcessing ? (
+                  <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-secondary/40 px-4 py-4 text-[13px] font-medium text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isProcessing === "approving"
+                      ? "Approving..."
+                      : isProcessing === "rejecting"
+                        ? "Rejecting..."
+                        : "Executing..."}
+                  </div>
+                ) : status === "approved" ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleExecute(paymentId, recipientPubkey, key);
+                    }}
+                    className="btn-primary w-full"
+                  >
+                    Execute Payment
+                    <ExternalLink className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApprove(paymentId, key);
+                      }}
+                      className="btn-primary w-full"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReject(paymentId, key);
+                      }}
+                      className="btn-secondary w-full text-destructive hover:text-destructive"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Reject
+                    </button>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-border bg-secondary/40 px-4 py-4 text-[13px] leading-6 text-muted-foreground">
+                  {riskScore > 30 ? (
+                    <div className="flex items-start gap-2 text-amber-300">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Higher-risk request. Review the memo and recipient wallet before signing.</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 text-emerald-300">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Low-friction request based on current risk scoring and approval state.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="mx-auto flex max-w-4xl items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Approvals &amp; Execution</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {actionablePayments.length} payment{actionablePayments.length !== 1 ? "s" : ""} waiting for action
-        </p>
-      </div>
+    <div className="page-shell mx-auto max-w-6xl space-y-6 animate-in">
+      <section className="card px-6 py-6 lg:px-7">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="eyebrow">Approvals</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl">Take the next treasury action</h1>
+            <p className="mt-3 max-w-2xl text-[14px] leading-6 text-muted-foreground">
+              Requests that still need signatures stay separate from requests that are already ready to execute.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <span className="badge badge-neutral">{actionablePayments.length} actionable</span>
+            <span className="badge badge-warning">{awaitingSigners} awaiting signers</span>
+            <span className="badge badge-success">{readyToExecute} ready to execute</span>
+            <span className="badge badge-info">{formatCurrency(queueValue)} in queue</span>
+          </div>
+        </div>
+      </section>
 
       {actionablePayments.length === 0 ? (
-        <div className="glass rounded-xl p-10 text-center">
-          <CheckCircle2 className="w-10 h-10 text-[var(--success)] mx-auto mb-3" />
-          <p className="text-muted-foreground">No pending actions</p>
-          <p className="text-xs text-muted-foreground mt-1">All payments have been processed</p>
+        <div className="card p-12 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-success/10">
+            <CheckCircle2 className="h-6 w-6 text-success" />
+          </div>
+          <h3 className="mt-4 text-xl font-semibold tracking-tight">Nothing is waiting on treasury action</h3>
+          <p className="mt-2 text-[14px] text-muted-foreground">
+            All payment requests are either completed or absent. New approval work will appear here automatically.
+          </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {actionablePayments.map((p) => {
-            const acct = p.account;
-            const key = p.publicKey.toBase58();
-            const paymentId = acct.paymentId.toNumber();
-            const displayId = `BB-${String(paymentId + 1).padStart(3, "0")}`;
-            const amount = acct.amount.toNumber() / 1_000_000;
-            const category = Object.keys(acct.category)[0];
-            const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1);
-            const riskScore = acct.riskScore;
-            const memo = acct.memo;
-            const requester = truncatePubkey(acct.requester.toBase58());
-            const approvals = acct.approvals || [];
-            const requiredApprovals = acct.requiredApprovals;
-            const createdAt = new Date(acct.createdAt.toNumber() * 1000).toLocaleDateString();
-            const isProcessing = processing[key];
-            const status = Object.keys(acct.status)[0].toLowerCase();
-            const recipientPubkey = acct.recipient.toBase58();
-
-            return (
-              <div key={key} className="glass rounded-xl overflow-hidden">
-                {/* Header */}
-                <div
-                  className="flex items-center justify-between p-5 cursor-pointer hover:bg-secondary/30 transition-colors"
-                  onClick={() => setExpanded(expanded === key ? null : key)}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-2 h-2 rounded-full ${
-                      riskScore > 30 ? "bg-[var(--warning)]" : "bg-[var(--success)]"
-                    } pulse-subtle`} />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium font-mono text-sm">{displayId}</span>
-                        <span className="text-sm text-muted-foreground">to {truncatePubkey(acct.recipient.toBase58())}</span>
-                        {status === "approved" && (
-                          <span className="badge-success text-xs px-2 py-0.5 rounded">Approved</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {categoryLabel} · {createdAt} · by {requester}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="font-mono font-medium">${amount.toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {approvals.length}/{requiredApprovals} approvals
-                      </div>
-                    </div>
-                    {expanded === key ? (
-                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </div>
+        <div className="space-y-6">
+          {paymentsReadyToExecute.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="section-title">Ready to execute</h2>
+                  <p className="mt-1 text-[12px] text-muted-foreground">Already approved. These are the fastest actions in the queue.</p>
                 </div>
-
-                {/* Expanded Details */}
-                {expanded === key && (
-                  <div className="border-t border-border px-5 py-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-xs text-muted-foreground">Payment ID</span>
-                        <p className="font-mono">{displayId}</p>
-                      </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground">Risk Score</span>
-                        <p className={`font-mono ${riskScore > 30 ? "text-[var(--warning)]" : "text-[var(--success)]"}`}>
-                          {riskScore}/100
-                        </p>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-xs text-muted-foreground">Memo</span>
-                        <p>{memo || "No memo"}</p>
-                      </div>
-                    </div>
-
-                    {/* Approval Progress */}
-                    <div>
-                      <span className="text-xs text-muted-foreground">Approvals</span>
-                      <div className="flex items-center gap-2 mt-2">
-                        {Array.from({ length: requiredApprovals }).map((_, i) => (
-                          <div
-                            key={i}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
-                              i < approvals.length
-                                ? "badge-success"
-                                : "bg-secondary text-muted-foreground"
-                            }`}
-                          >
-                            <User className="w-3 h-3" />
-                            {i < approvals.length ? (
-                              <span>Approved by {truncatePubkey(approvals[i].toBase58())}</span>
-                            ) : (
-                              <span>Waiting...</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    {isProcessing ? (
-                      <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-secondary text-muted-foreground text-sm font-medium">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {isProcessing === "approving" ? "Approving..." : isProcessing === "rejecting" ? "Rejecting..." : "Executing..."}
-                      </div>
-                    ) : status === "approved" ? (
-                      <div className="flex items-center gap-3 pt-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleExecute(paymentId, recipientPubkey, key); }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[var(--success)]/20 text-[var(--success)] font-medium text-sm hover:bg-[var(--success)]/30 transition-colors"
-                        >
-                          <ExternalLink className="w-4 h-4" /> Execute Payment
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3 pt-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleApprove(paymentId, key); }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[var(--success)]/20 text-[var(--success)] font-medium text-sm hover:bg-[var(--success)]/30 transition-colors"
-                        >
-                          <CheckCircle2 className="w-4 h-4" /> Approve
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleReject(paymentId, key); }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-destructive/20 text-destructive font-medium text-sm hover:bg-destructive/30 transition-colors"
-                        >
-                          <XCircle className="w-4 h-4" /> Reject
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <span className="badge badge-success">{paymentsReadyToExecute.length}</span>
               </div>
-            );
-          })}
+              <div className="space-y-4">
+                {paymentsReadyToExecute.map(renderPaymentCard)}
+              </div>
+            </section>
+          )}
+
+          {paymentsNeedingApproval.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="section-title">Waiting for approvals</h2>
+                  <p className="mt-1 text-[12px] text-muted-foreground">Sign or reject these before they can move to execution.</p>
+                </div>
+                <span className="badge badge-warning">{paymentsNeedingApproval.length}</span>
+              </div>
+              <div className="space-y-4">
+                {paymentsNeedingApproval.map(renderPaymentCard)}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
