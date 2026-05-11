@@ -8,9 +8,45 @@ import { Toaster } from "sonner";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://black-budget.vercel.app";
+const TITLE = "Black Budget — Private treasury on Solana";
+const DESCRIPTION =
+  "The private finance operating system for internet-native companies. Invoices, payroll, treasury policies, and approvals on Solana with selective disclosure proofs.";
+
 export const metadata: Metadata = {
-  title: "Black Budget — Private Finance OS",
-  description: "The private finance operating system for internet-native companies. Invoices, payroll, treasury, and approvals on Solana with selective disclosure.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: TITLE, template: "%s — Black Budget" },
+  description: DESCRIPTION,
+  applicationName: "Black Budget",
+  keywords: [
+    "Solana",
+    "Token-2022",
+    "treasury",
+    "private finance",
+    "selective disclosure",
+    "confidential transfers",
+    "compliance",
+    "invoice",
+    "payroll",
+    "DAO treasury",
+    "Colosseum Frontier",
+  ],
+  authors: [{ name: "Black Budget" }],
+  openGraph: {
+    type: "website",
+    siteName: "Black Budget",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
+  category: "finance",
 };
 
 export default function RootLayout({

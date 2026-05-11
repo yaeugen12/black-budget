@@ -1,10 +1,37 @@
-# Black Budget
+<p align="center">
+  <img src="app/public/logo.svg" alt="Black Budget" width="80" height="80" />
+</p>
 
-**The private finance operating system for internet-native companies.**
+<h1 align="center">Black Budget</h1>
 
-Invoices, payroll, treasury policies, and approvals — executed on Solana with confidential transfers and selective disclosure proofs.
+<p align="center">
+  <strong>The private finance operating system for internet-native companies.</strong><br/>
+  Invoices, payroll, treasury policies, and approvals — executed on Solana with Token-2022 confidential transfers and selective disclosure proofs.
+</p>
 
-> Built for the [Solana Frontier Hackathon](https://colosseum.com/frontier) (April 2026)
+<p align="center">
+  <a href="https://colosseum.com/frontier">Solana Frontier Hackathon 2026</a> &nbsp;·&nbsp;
+  <a href="./SUBMISSION.md">Submission kit</a> &nbsp;·&nbsp;
+  <a href="./AUDIT_FINDINGS_RESOLVED.md">Audit status</a>
+</p>
+
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/Solana-Devnet-9945FF?style=flat-square&logo=solana" alt="Solana Devnet"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Token--2022-Confidential_Transfer-14F195?style=flat-square" alt="Token-2022"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Audits-4_passes_·_0_open_Critical%2FHigh-success?style=flat-square" alt="Audits"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/Tests-69%2B_passing-blue?style=flat-square" alt="Tests"/></a>
+  <a href="#"><img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square" alt="MIT"/></a>
+</p>
+
+---
+
+## Demo Video
+
+> Recording in progress — replace this section with the YouTube embed after recording. Script + storyboard live in [`SUBMISSION.md` § 4](./SUBMISSION.md#4-demo-video-script-4-min).
+
+[![Black Budget Demo](https://img.shields.io/badge/▶_Watch_4--min_demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/REPLACE_AFTER_RECORDING)
+
+**Live demo (Devnet)**: https://black-budget.vercel.app *(set to Phantom Devnet · faucet preloaded)*
 
 ---
 
@@ -176,7 +203,7 @@ Self-approval:     Blocked (approver ≠ requester)
 
 ### Security Hardening
 
-The program has been through 3 rounds of security auditing:
+The program has been through **4 audit passes** (3 manual rounds + 1 verification pass against the current code). Per-finding resolution is tracked in [`AUDIT_FINDINGS_RESOLVED.md`](./AUDIT_FINDINGS_RESOLVED.md) — **0 Critical / 0 High open** at commit `79de76e`.
 
 - **Monthly burn cap** enforced at execution (not just creation) — prevents batch bypass
 - **Self-payment** blocked: `requester ≠ recipient`

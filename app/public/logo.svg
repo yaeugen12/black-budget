@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Black slab background -->
+  <rect width="64" height="64" rx="10" fill="#0A0A0A"/>
+  <!-- BB monogram -->
+  <text x="32" y="42"
+        font-family="ui-monospace, 'SF Mono', Menlo, monospace"
+        font-size="28"
+        font-weight="800"
+        fill="#FAFAFA"
+        text-anchor="middle"
+        letter-spacing="-1">BB</text>
+  <!-- Redaction bar — the "private" mark -->
+  <rect x="14" y="28" width="36" height="6" fill="#FAFAFA"/>
+  <!-- Subtle border for crispness on light backgrounds -->
+  <rect x="0.5" y="0.5" width="63" height="63" rx="9.5" stroke="#1F1F1F" stroke-width="1"/>
+</svg>
